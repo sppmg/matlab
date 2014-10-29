@@ -1,4 +1,6 @@
 function food_control(op)
+% start -> food_control('s')
+% stop -> food_control('k')
 	persistent f
 	clf;
 	%op='k';
