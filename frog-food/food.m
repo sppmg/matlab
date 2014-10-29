@@ -29,29 +29,27 @@ classdef food < handle
 		end
 		function move(obj)
 			t=0.1 ; % t==dt
-			c=3.5;			
-			obj.a=obj.a-c*obj.v.^2 ;
+			c=3.5;	%3.5		
+			obj.a=obj.a-c*obj.v.^3 ;
 			obj.pos=obj.pos+(obj.v*t+0.5*obj.a*t^2);
 			obj.v=obj.v+obj.a*t;
-			obj.a=[0 0];
-			
+			obj.a=-c*obj.v.^3;
 			
 			check_boundary(obj);
 			draw(obj)
-			obj.kick(-2);
+			obj.kick(-1.5);
 		end
 		function kick(obj,varargin)
+			
 			if nargin > 1
 				level=varargin{1} ;
 			else
 				level=-2 ;
 			end
-			if obj.v==[0,0]
+			if abs(obj.v) < 1e-3
 				level=level+1;
 			end
-			obj.a=(rand(1,2)-0.5)*10^level;
-			%obj.move;
-			
+			obj.a=obj.a+(rand(1,2)-0.5)*10^level;
 		end
 		function start(obj)
 			start(obj.TimerHandle);
@@ -60,7 +58,12 @@ classdef food < handle
 		function stop(obj)
 			stop(obj.TimerHandle);
 		end
-		
+% 		function delete(obj)
+%			% can't work!!!
+% 			delete(obj.TimerHandle)
+% 			delete(obj.ItemHandle)
+% 			clear obj;
+% 		end
 	end
 end
 
@@ -92,26 +95,22 @@ function draw(obj)
 			switch lower(obj.shape)
 				case '2d'
 					obj.shape=ss{1};
-					t = [0:0.01:2*pi];
-					x = sin(t)*obj.size(1);
-					y = cos(t)*obj.size(1);
-					fill(x,y,obj.color ) ;
+					% other method
+% 					t = [0:0.01:2*pi];
+% 					x = sin(t)*obj.size(1);
+% 					y = cos(t)*obj.size(1);
+% 					fill(x,y,obj.color) ;
 				case '3d'
 					obj.shape=ss{2};
-					[x,y,z]=sphere(10);
-					surf(x,y,z,'EdgeColor','none','FaceColor',obj.color,'FaceLighting',obj.shape);
-					camlight;
+					
 				otherwise
 					obj.shape=ss{ceil(rand*length(ss))};
 			end
 		end
-		
-		
-			% 'Position',[obj.pos+0.5*obj.size ,obj.size]
-		
-		
-		
-		%colormap(bone);
+		[x,y,z]=sphere(10);
+		surf(x,y,z,'EdgeColor','none','FaceColor',obj.color,'FaceLighting',obj.shape);
+		camlight;
+			
 		set(obj.ItemHandle,'Visible','off','PlotBoxAspectRatioMode','manual');
 	else
 		if (obj.pos+obj.size <= 1) & (obj.pos>=0) % use & not && , because it's array
@@ -121,34 +120,15 @@ function draw(obj)
 end
 
 function check_boundary(obj)
-	%obj.pos
-	%obj.size
-	%obj.v
-	
 	for fi=1:2
-		count=0 ;
 		if(obj.pos(fi)+obj.size(fi) > 1)
 			%obj.pos(fi)=2-(obj.pos(fi)+obj.size(fi));
 			obj.v(fi)=-obj.v(fi);
-			count=count+1;
-			if count > 100
-				obj
-				disp('inf loop')
-				error;
-				
-			end
 		end
-		count=0 ;
+		
 		if(obj.pos(fi) < 0)
 			%obj.pos(fi)=0+abs(obj.pos(fi));
 			obj.v(fi)=-obj.v(fi);
-			count=count+1;
-			if count > 100
-				obj
-				disp('inf loop')
-				error;
-				
-			end
 		end
 	end
 end
