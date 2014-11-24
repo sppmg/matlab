@@ -1,0 +1,73 @@
+
+% for count.
+ecg = creat_chan('chan','dev2/ai0:2','rate',4000,'callfunc','proc','callrate',10)
+ecg.start
+
+% for f
+ecg = creat_chan('chan','dev2/ai0:2','rate',4000,'datanum',1000,'callfunc','proc','callrate',10)
+ecg.start
+
+% for s
+ecg = creat_chan('chan','dev2/ai0:2')
+ecg.start
+
+
+
+
+.read	if = ai => start
+.write	if = ao => start
+
+
+
+make a task obj 結合讀寫
+
+task.read
+	.write
+	.stop
+	.addchan(ecg,output)
+	
+	
+	
+ there is matlab func :
+ cellfun
+ str2func
+ 
+ 
+ ----------oop----------
+ task.start	for timing task
+ task.read/write for single
+ 
+ daq=task( {'alias','ecg' , 'chan', 'dev/ai0' , 'rate' , 1000 ,'callfunc','proc'} ,
+	{'alias','vlp' , 'chan', 'dev/ai1' , 'rate' , 500} ,
+	{'alias','output' , 'chan', 'dev/a00' } )
+daq.start % start all mode == c
+daq.write(5)
+-------- 141118 --------------
+daq = obj( 'alias','ecg' , ...
+	'chan', 'dev/ai0' ,  ...
+	'rate' , 1000 ,  ...
+	'callfunc','proc' ) ;
+
+daq = obj( 'alias',{'ecg','ecg_ra',LVP} , ...
+	'chan', {'dev/ai0:1','dev/ai4'} ,  ...
+	'rate' , 1000 ,  ...
+	'callfunc','proc' ) ;
+
+out = obj( 'chan', 'dev/ao0') ;
+
+daq.start  % for mode == c
+pause(1);
+plot( daq.DataWindow('ecg') );
+out.write(5);	% for mode == s, block f ??
+out.write('aliens',5);
+
+
+----------------
+ai
+	s -> to Data , no timer , no callback
+	f -> same as c
+	c -> to Data , timer , callback
+ao
+	s -> from data or var  , no timer ,no callback
+	f -> 
+	c -> from data , 

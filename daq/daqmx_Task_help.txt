@@ -1,0 +1,10 @@
+Base on timing task. 
+
+ecg = daqmx_task('chan','dev2/ai0:2','alias',{'ecg_ra','ecg_v','lvp'},'rate',4000,'callfunc','proc','ProcPeriod',0.1);
+ecg.ResetDev
+ecg.start
+
+figure; plot(ecg.DataTime , ecg.DataWindow); % plot 3 lines of each channel .
+figure; plot(ecg.DataTime , ecg.DataWindow('ecg_ra') ); % plot ecg_ra only .
+
+ecg.stop
