@@ -6,7 +6,7 @@ classdef daqmx_Task < handle
 		Max = 10 ;
 		Min = -10 ;
 		DataLayout = 1 ;	% DAQmx_Val_GroupByScanNumber = 1 ;
-		SampleNum = 200 ; % little more than 10 Hz update rate.
+		SampleNum = 200 ; % per channel,little more than 10 Hz update rate.
 		Timeout = 5 ;
 		ProcPeriod = 0.1 ;
 		DataWindowLen = 1000 ; % unit = data number
@@ -188,39 +188,17 @@ classdef daqmx_Task < handle
 		function varargout=start(obj,varargin)
 			switch obj.ChanType
 				case 'ai'
-					%obj.NITaskHandle = DAQmxCreateAIVoltageChan(obj.LibAlias,[], obj.PhyChan ,obj.Min , obj.Max );
 					switch obj.Mode
 						case 'Single'
 							aibg([],[],obj) ;
-						case 'Finite'
-%  							if isempty(obj.TimerHandle)
-%  								obj.TimerHandle = timer('TimerFcn',{@aibg,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod);
-%  							end
-%  							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.TimerHandle);
-%  							
-%  							DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNum); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples
-%  							
-%  							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.TimerHandle);
-%  							%obj.time=tic ;
-%  							start(obj.TimerHandle) ;
-						case 'Continuous'
+						%case 'Finite'
+						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-							
-							if ~isempty(obj.TimerHandle)
-								delete(obj.TimerHandle) ;
-							end
-							obj.TimerHandle = timer('TimerFcn',{@aibg,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod) ;
-							
-							DAQmxCfgSampClkTiming(obj.LibAlias, obj.NITaskHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
-							
+							SetTiming(obj);
 							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
-							%obj.time=tic ;
-							%aibg(1,2,obj)
 							start(obj.TimerHandle) ;
-						
 					end
 				case 'ao'
-					obj.NITaskHandle = DAQmxCreateAOVoltageChan(obj.LibAlias,[], obj.PhyChan ,obj.min , obj.max );
 					switch obj.Mode
 						case 'Single'
 							aobg(obj) ;
@@ -299,6 +277,8 @@ classdef daqmx_Task < handle
 		function ResetDev(obj)
 			err=calllib(obj.LibAlias,'DAQmxResetDevice',obj.DevName) ;
 		end
+		
+		
 	end
 end
 
@@ -333,5 +313,26 @@ function aobg
 	if strcmpi(ChanObj.Mode,'Single')
 		%ChanObj.DataWindow_prop = NewData ;
 	else
+	end
+end
+function SetTiming(obj)
+	if ~isempty(obj.TimerHandle)
+		delete(obj.TimerHandle) ;
+	end
+	switch obj.ChanType
+		case 'ai'
+			TimerFcn_Handle=@aibg ;
+		case 'ao'
+			TimerFcn_Handle=@aobg ;
+	end
+	switch obj.Mode
+		case 'Finite'
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'TasksToExecute',ceil(obj.SampleNum/obj.Rate/obj.ProcPeriod));
+			DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNum); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples , Total data number set in SampleNum
+		case 'Continuous'
+			
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod) ;
+			
+			DAQmxCfgSampClkTiming(obj.LibAlias, obj.NITaskHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
 	end
 end
