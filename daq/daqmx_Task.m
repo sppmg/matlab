@@ -10,9 +10,11 @@ classdef daqmx_Task < handle
 		Timeout = 5 ;
 		ProcPeriod = 0.1 ;
 		DataWindowLen = 1000 ; % unit = data number
+		DataWindow_prop ; % storage input data.
 		CallbackFunc ; 
 		
-		
+		CircBuf = 0 ; % Circulary buffer of write (ao)
+		BufHead = 0 ; % Head pointer for write buffer.
 	end
 	
 	properties (SetAccess = private)
@@ -26,7 +28,7 @@ classdef daqmx_Task < handle
 		ChanOccupancy ; 
 		
 		DataTime ; % storage time of each data
-		DataWindow_prop ; % storage input data.
+		
 		
 		DataLastTime = 0 ;
 		DataLastPartNum = 0 ;
@@ -38,26 +40,6 @@ classdef daqmx_Task < handle
 		
 	end
 	methods
-%  		function obj = daqmx_Task(varargin)
-%  			
-%  			
-%  			if nargin > 0
-%  				for arg_i = 1:nargin
-%  					if isobj (varargin{arg_i}) % check function name
-%  						% add chan
-%  						obj.ChanHandle=[obj.ChanHandle,varargin{arg_i}] ;
-%  						obj.ChanType{end+1}=varargin{arg_i}.ChanType ;
-%  					end
-%  					if iscell
-%  						% make chan
-%  						obj.ChanHandle=[obj.ChanHandle, ...
-%  							daqmx_Chan(varargin{arg_i})  ] ;
-%  						%obj.ChanAlias(end+1) = obj.ChanHandle.alias
-%  					end
-%  				end
-%  			end
-%  		end
-		% ---------------------------------------------
 		function obj=daqmx_Task(varargin)
 			obj.LibAlias = daqmx_loadlib ;
 			ModeAlreadySet = 0 ;
@@ -201,29 +183,13 @@ classdef daqmx_Task < handle
 				case 'ao'
 					switch obj.Mode
 						case 'Single'
-							aobg(obj) ;
-						case 'Finite'
-%  							if isempty(obj.TimerHandle)
-%  								obj.TimerHandle = timer('TimerFcn',{@aibg,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod);
-%  							end
-%  							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.TimerHandle);
-%  							
-%  							DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNum); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples
-%  							
-%  							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.TimerHandle);
-%  							%obj.time=tic ;
-%  							start(obj.TimerHandle) ;
-						case 'Continuous'
-%  							if isempty(obj.TimerHandle)
-%  								obj.TimerHandle = timer('TimerFcn',{@aibg,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod);
-%  							end
-%  							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.TimerHandle);
-%  							
-%  							DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
-%  							
-%  							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.TimerHandle);
-%  							%obj.time=tic ;
-%  							start(obj.TimerHandle) ;
+							
+							aobg([],[],obj) ;
+						case {'Finite' , 'Continuous'}
+							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
+							SetTiming(obj);
+							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
+							start(obj.TimerHandle) ;
 					end
 			end
 		end
@@ -241,6 +207,9 @@ classdef daqmx_Task < handle
 		function varargout=read(obj,varargin)	% For single mode , read and output to argout .
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
+			end
+			if ~strcmpi(obj.Mode,'Single')
+				error('read method only allow in "single" mode.');
 			end
 			aibg([],[],obj) ;
 			if nargin > 1
@@ -309,12 +278,57 @@ function varargout=aibg(TimerObj,event,ChanObj)
 	
 end
 
-function aobg
+% ======== Buffer size ========
+% Buffered writes require a minimum buffer size of 2 samples. If you do not configure the buffer size using DAQmxCfgOutputBuffer, NI-DAQmx automatically configures the buffer when you configure sample timing.
+% If the acquisition is finite , NI-DAQmx allocates a buffer equal in size to the value of samples per channel. 
+% If the acquisition is continuous, NI-DAQmx will allocate a buffer according to the following table: (S == Scan)
+% Sample Rate			Buffer Size
+% 0 - 100 S/s				1 kS
+% 100 - 10,000 S/s 			10 kS
+% 10,000 - 1,000,000 S/s 	100 kS
+% > 1,000,000 S/s 			1 MS
+
+function aobg(TimerObj,event,ChanObj)
 	if strcmpi(ChanObj.Mode,'Single')
-		%ChanObj.DataWindow_prop = NewData ;
+		if numel(obj.DataWindow_prop) < obj.ChanNum
+			obj.DataWindow_prop=[obj.DataWindow_prop, zeros(1,obj.ChanNum-numel(obj.DataWindow_prop))] ;
+		else
+			obj.DataWindow_prop=obj.DataWindow_prop(1:obj.ChanNum); ;
+		end
+		WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
 	else
+		if mod(numel(obj.DataWindow_prop), obj.ChanNum)
+			% it's should stop. Don't put adaptive code.
+			error('Output data length not same for each channel.');
+		end
+		
+	
+	%----------------- node == f
+	WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
+	
+	%----------------- node == c
+	
+		if obj.CircBuf
+			BufLen=length(obj.DataWindow_prop);
+			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, circshift(obj.DataWindow_prop,-obj.BufHead) );
+			obj.BufHead = mod(obj.BufHead+WrittenNum,BufLen);
+		else
+			
+			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
+			obj.DataWindow_prop = obj.DataWindow_prop(WrittenNum+1:end,:);
+		end
+	
+	
+	
+	end
+	
+	
+	% TODO : should reshape or sort data ?
+	if ~isempty(ChanObj.CallbackFunc)
+		feval(ChanObj.CallbackFunc, ChanObj) % call user's function
 	end
 end
+
 function SetTiming(obj)
 	if ~isempty(obj.TimerHandle)
 		delete(obj.TimerHandle) ;
