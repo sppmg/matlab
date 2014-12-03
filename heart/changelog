@@ -1,0 +1,8 @@
+2014-12-03
+* ibi_analyze.m :
+Move data save command togeter and comment ibi,dibi,dibi/ibi .(all in tidp file).
+Move thread section after open file window.
+Change axes of dIBI to logscale.
+Add limiter for ibi and dibi, but only support gnuplot.
+Change the order of lines in gnuplot script.
+Add waitting batch code

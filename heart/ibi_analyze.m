@@ -6,16 +6,18 @@ tic;
 
 %%%%%% Set user var here %%%%%
 %------- experiment var
-sampling_rate = 40000 ;			% our : rat=4000 ; frog = 500
-peak_interval_min_sec = 0.15 ;	% for findpeak; suggestion rat=0.1*sampling_rate ,frog=0.3*sampling_rate
-peak_height_min = -0.2;		% for findpeak ,allowed <0
-peak_drop_condition = 3 ;		% times of sigma
+sampling_rate = 4000 ;			% our : rat=4000 ; frog = 500
+peak_interval_min_sec = 0.4 ;	% for findpeak; suggestion rat=0.1*sampling_rate ,frog=0.3*sampling_rate
+peak_height_min = -0.5;		% for findpeak ,allowed <0
+extremum_drop_condition = 3 ;		% times of sigma
 
 raw_ch_time=1 ;
 raw_ch_ecg=0 ;
 raw_ch_ecg_ra=2 ;
 auto_switch_channel=1 ; 	% auto switch by our usual data format . It's overwrite raw_ch_* var .
 
+limiter_ibi=0 ;		% Maxima value, only apply in plotting. Set 0 to disable.
+limiter_dibi=0 ;	% <<< Now only support gnuplot and dibi >>>
 %------- control var (matlab -> true = 1 , false = 0)
 extrasystoles_detection=0 ;	% need ecg channel
 
@@ -26,9 +28,10 @@ figure_visible=0;	% on == 1 , off == 0
 figure_gnuplot=1 ;	% only action when figure_dont_plot=1
 
 thread_num=3 ;
+wait_batch=1 ;		% It' will wait all batch done when == 1 .
 %%%%%% Set env var here %%%%%
 %------- set the program version. yyyymmddvv . vv is version in each day.
-env_program_version=2014060201;
+env_program_version=2014060202;
 env_papp_path=['.' filesep] ;
 %%%%%% other setting %%%%%
 addpath('./common');
@@ -65,12 +68,10 @@ if ~isempty(ext_prog_test_cmd)
 	end
 end
 
+fprintf('Thread number = %d\n',thread_num);
+select_files
+
 %------- configure multithread
-% if verLessThan('matlab','8.3')
-% 	matlabpool
-% else
-% 	parpool
-% end
 if verLessThan('matlab','8.3')
 	if thread_num > 1
 		switch matlabpool('size')
@@ -87,7 +88,6 @@ if verLessThan('matlab','8.3')
 		end
 	end
 else
-	% copy follow 6 lines from Matlab doc
 	poolobj = gcp('nocreate'); % If no pool, do not create new one.
 	if isempty(poolobj)
 		poolsize = 0;
@@ -111,8 +111,6 @@ else
 	end
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-select_files
 
 ana_log=[];	% store mean and sd of each file.
 
@@ -188,7 +186,7 @@ for fi=1:length(file)
 	end
 	
 	peaks_point=[data(locs,raw_ch_time), data(locs,raw_ch_ecg_ra)];
-	save(fullfile(path,['peaks_of_',f_name,'.txt']),'peaks_point','-ascii');
+	
 	
 	if check_peak==1		%save finded peaks plot
 		if figure_dont_plot
@@ -219,8 +217,9 @@ for fi=1:length(file)
 					fprintf(fid,'set grid\n');
 					fprintf(fid,'set xtics 100\n\n');
 									
-					fprintf(fid,'plot datafile1 u %d:%d w l lc rgb "#0000FF" , datafile2 u 1:2 w p pt 3 ps 1 lc rgb "#FF0000" \n', ...
+					fprintf(fid,'plot datafile2 u 1:2 w p pt 3 ps 1 lc rgb "#FF0000" , datafile1 u %d:%d w l lc rgb "#0000FF" \n', ...
 						raw_ch_time, raw_ch_ecg_ra);
+
 				fclose(fid) ;
 				% gnuplot_shell_cmd=['gnuplot ', fullfile(path,['check_',f_name,'.gp']) ] ;
 				% add
@@ -257,24 +256,29 @@ for fi=1:length(file)
 	ibi=[data(locs(2:end),raw_ch_time), diff(data(locs,raw_ch_time),1)];
 	[mu_hat, sigma_hat] = normfit(ibi(:,2));
 	
-	% drop data 
-	ibi_outliers_inx=find(abs(ibi(:,2) - mu_hat ) > peak_drop_condition*sigma_hat );
+	% drop IBI data more then sigma
+	ibi_outliers=[];
+	ibi_outliers_inx=find(abs(ibi(:,2) - mu_hat ) > extremum_drop_condition*sigma_hat );
 	if ~isempty(ibi_outliers_inx)
 		fprintf('droped %d data of ibi\n',length(ibi_outliers_inx)) ;
 		ibi_outliers=ibi(ibi_outliers_inx,:);
 		ibi( ibi_outliers_inx ,:)=[];
 		[mu_hat, sigma_hat] = normfit(ibi(:,2));
-	else
-		ibi_outliers=[0,0];	% check : can we set [] ?
+	%else
+	%	ibi_outliers=[0,0];	% check : can we set [] ?
 	end
-	save(fullfile(path,['ibi_of_',f_name,'.txt']),'ibi','-ascii');
-	save(fullfile(path,['ibi_outlier_of_',f_name,'.txt']),'ibi_outliers','-ascii');
+	
 	
 	if ~figure_dont_plot
 		clf;
-		plot( sort( [ibi(:,1);ibi_outliers(:,1)] ), sort( [ibi(:,2);ibi_outliers(:,2)] ), 'b:', ...
-			ibi(:,1),ibi(:,2), 'r*', ...
-			ibi_outliers(:,1), ibi_outliers(:,2),'kx');
+		if isempty(ibi_outliers_inx)
+			plot( ibi(:,1), ibi(:,2), 'b:', ...
+				ibi(:,1),ibi(:,2), 'r*');
+		else
+			plot( sort( [ibi(:,1);ibi_outliers(:,1)] ), sort( [ibi(:,2);ibi_outliers(:,2)] ), 'b:', ...
+				ibi(:,1),ibi(:,2), 'r*', ...
+				ibi_outliers(:,1), ibi_outliers(:,2),'kx');
+		end
 		ylim_now=ylim;	% set y axis start from 0
 		ylim([0,ylim_now(2)]);
 		title(file{fi},'Interpreter', 'none');
@@ -292,17 +296,27 @@ for fi=1:length(file)
 		end
 	end
 	
-	% moving SD of IBI -> dIBI
+	% moving SD for IBI -> dIBI
 	dibi=[ibi(:,1), movingstd(ibi(:,2),50,'c')];
-	save(fullfile(path,['dibi_of_',f_name,'.txt']),'dibi','-ascii');
+	% drop dIBI data more then sigma
+	[mu_hat_dibi, sigma_hat_dibi] = normfit(dibi(:,2));
+	dibi_outliers_inx=find(abs(dibi(:,2) - mu_hat_dibi ) > extremum_drop_condition*sigma_hat_dibi );
+	if isempty(dibi_outliers_inx)
+		dibi( dibi_outliers_inx ,:)=[];
+	end
 	
 	% dIBI / IBI
 	dibipibi=[ibi(:,1), dibi(:,2)./ibi(:,2)];
-	save(fullfile(path,['dibipibi_of_',f_name,'.txt']),'dibipibi','-ascii');
 	
 	% save together : Time , IBI , dIBI , dIBI / IBI
 	tidp=[ibi(:,1), ibi(:,2), dibi(:,2), dibipibi(:,2)] ;
 	save(fullfile(path,['tidp_of_',f_name,'.txt']),'tidp','-ascii');
+	
+	save(fullfile(path,['peaks_of_',f_name,'.txt']),'peaks_point','-ascii');
+	%save(fullfile(path,['ibi_of_',f_name,'.txt']),'ibi','-ascii');
+	save(fullfile(path,['ibi_outlier_of_',f_name,'.txt']),'ibi_outliers','-ascii');
+	%save(fullfile(path,['dibi_of_',f_name,'.txt']),'dibi','-ascii');
+	%save(fullfile(path,['dibipibi_of_',f_name,'.txt']),'dibipibi','-ascii');
 	
 	if figure_gnuplot && sum(ismember(ext_prog_list,'gnuplot')) > 0
 		fid=fopen( fullfile(path,['tip_var_',f_name,'.gp']) ,'w');
@@ -320,6 +334,7 @@ for fi=1:length(file)
 			
 			fprintf(fid,'set term png size %d,800 \n',length(ibi(:,1)));
 			fprintf(fid,'set output outputfile1\n');
+			fprintf(fid,'set logscale y2\n');
 			fprintf(fid,'set title "%s"\n',f_name);
 			fprintf(fid,'set xlabel "Time (s)"\n');
 			fprintf(fid,'set ylabel "IBI (s)"\n');
@@ -327,9 +342,18 @@ for fi=1:length(file)
 			fprintf(fid,'set grid\n');
 			fprintf(fid,'set xtics 100\n');
 			fprintf(fid,'set ytics nomir\n');
-			fprintf(fid,'set y2tics\n\n');
-			
-			fprintf(fid,'plot datafile1 u 1:2 title "IBI" w p pt 1 lc rgb "#FF0000" axis x1y1 , \\\n\t "" u 1:2 title "" w l lc rgb "#BFD9FF" axis x1y1 , \\\n\t "" u 1:4 title "dIBI/IBI" w lp lc rgb "#00DC00" axis x1y2 \n' ) ;
+			fprintf(fid,'set y2tics\n');
+			if limiter_dibi || limiter_ibi
+				if  limiter_ibi && max(ibi(:,2)) > limiter_ibi
+					fprintf(fid,'set yr [*:%f]\n',limiter_ibi);
+				end
+				if limiter_dibi && max(dibi(:,2)) > limiter_dibi
+					fprintf(fid,'set y2r [*:%f]\n',limiter_dibi);
+				end
+			end
+			fprintf(fid,'\n');
+			fprintf(fid,'plot datafile1 u 1:4 title "dIBI/IBI" w lp lc rgb "#00DC00" axis x1y2 , \\\n\t "" u 1:2 title "" w l lc rgb "#BFD9FF" axis x1y1 , \\\n\t "" u 1:2 title "IBI" w p pt 1 lc rgb "#FF0000" axis x1y1 \n' ) ;
+
 		fclose(fid) ;
 		% gnuplot_shell_cmd=['gnuplot ', fullfile(path,['tip_var_',f_name,'.gp']) ] ;
 		% add
@@ -345,9 +369,9 @@ for fi=1:length(file)
 	% totel mean and sd of IBI
 	fprintf('mean , sd = %f\t%f\n',mu_hat,sigma_hat)
 	ana_log=[ana_log;[mu_hat, sigma_hat, length(ibi_outliers) ]];
-	
+
+	% plot histgram with normal dist for IBI.
 	if ~figure_dont_plot
-		% plot histgram with normal dist.
 		h=histfit(ibi(:,1),100);
 		set(h(1),'FaceColor',[.8 .8 1])
 		xlim=[0.4 0.55];
@@ -385,11 +409,27 @@ ana_log
 toc;
 beep
 % wait all batch job
+if wait_batch
+	batch_finish_rate=0;
+	while batch_finish_rate < 100
+		pause(0.3);
+		tmp_old_state_rate=batch_finish_rate;
+		batch_finish_state=ismember({j_check.State , j_tip_var.State},'finished');
+		batch_finish_rate=sum(batch_finish_state)/numel(batch_finish_state)*100 ;
+		if batch_finish_rate ~= tmp_old_state_rate
+			fprintf('Batch jobs %0.2f%% finished.\n',batch_finish_rate);
+		end
+	end
+	toc;
+	beep;
+end
+delete([j_check , j_tip_var]);
 % check running jobs
 % j(3)=batch(@system,1,'xxxx');
 % sum(ismember({j.Status},'running'));
 %-------------
-% while sum(ismember({j.Status},'running')) == 0
+% batjob={j_check.State , j_tip_var.State};
+% while sum(ismember({j_check.State , j_tip_var.State},'running')) == 0
 % 	pause(0.5);
 % end
 
@@ -397,6 +437,8 @@ beep
 % 	wait(j_check(fi));
 % 	wait(j_tip_var(fi));
 % end
-beep
-%destroy(j)
+
+
+% delete(j) % in 2014a
+%destroy(j) % in 2011b ?
 %matlabpool close
