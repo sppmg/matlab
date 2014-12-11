@@ -10,11 +10,11 @@ classdef daqmx_Task < handle
 		Timeout = 5 ;
 		ProcPeriod = 0.1 ;
 		DataWindowLen = 1000 ; % unit = data number
-		DataWindow_prop ; % storage input data.
+		
 		CallbackFunc ; 
 		
 		CircBuf = 0 ; % Circulary buffer of write (ao)
-		BufHead = 0 ; % Head pointer for write buffer.
+		BufHead = 1 ; % Head pointer for write buffer, next write data.
 	end
 	
 	properties (SetAccess = private)
@@ -24,6 +24,7 @@ classdef daqmx_Task < handle
 		
 		DevName ;  % eg : dev1
 		ChanType ; % eg : ai / ao / di / do / etc ....
+		ChanMeas = 'Voltage' ; % Measure eg. V,I
 		ChanNum ;
 		ChanOccupancy ; 
 		
@@ -33,7 +34,8 @@ classdef daqmx_Task < handle
 		DataLastTime = 0 ;
 		DataLastPartNum = 0 ;
 		DataTotalNumPerChan = 0 ; % per channel 
-				
+		DataStorage ; % storage input data.
+		
 		LibHeader = 'NIDAQmx-lite.h';
 		LibDll = 'C:\WINDOWS\system32\nicaiu.dll' ;
 		LibAlias = 'nidaqmx' ;
@@ -59,7 +61,26 @@ classdef daqmx_Task < handle
 							obj.PhyChan = varargin{arg_i+1} ;
 							% Check 
 							% move follow code out of phaser because it will map with alias.
-							
+						case 'chantype'
+							obj.ChanType = varargin{arg_i+1} ;
+							switch lower(varargin{arg_i+1})
+								case {'ai')
+									obj.ChanType = 'ai';
+								case {'ao'}
+									obj.ChanType = 'ao' ;
+								otherwise
+									error('ChanType string not allowed.');
+							end
+						case 'chanmeas'
+							switch lower(varargin{arg_i+1})
+								case {'voltage','v')
+									obj.ChanMeas = 'Voltage';
+								case {'current','i'}
+									obj.ChanMeas = 'Current' ;
+								otherwise
+									error('ChanMeas string not allowed.')
+							end
+						
 						case 'alias'
 							% TODO
 							% check ChanAlias is unique and mutch PhyChan
@@ -74,6 +95,8 @@ classdef daqmx_Task < handle
 									obj.Mode = 'Finite' ;
 								case {'continuous','c'}
 									obj.Mode = 'Continuous' ;
+								otherwise
+									error('Mode string not allowed.');
 							end
 							ModeAlreadySet = 1 ;
 						case 'rate'
@@ -102,8 +125,12 @@ classdef daqmx_Task < handle
 						case 'min'
 							obj.Min = varargin{arg_i+1} ;
 						case 'procperiod'
-							% should > 0.001 s
-							obj.ProcPeriod = varargin{arg_i+1} ;
+							% should > 0.001 s , matlab timer limit.
+							if varargin{arg_i+1} <= 0.001
+								obj.ProcPeriod = 0.001 ; 
+							else
+								obj.ProcPeriod = varargin{arg_i+1} ;
+							end
 						case 'callbackfunc' % input string
 							obj.CallbackFunc = varargin{arg_i+1} ;
 						case 'datawindowlen' % data number per channel
@@ -159,21 +186,30 @@ classdef daqmx_Task < handle
 			
 			% --------------------------------
 			
-			switch obj.ChanType
-				case 'ai'
+			switch [obj.ChanType,obj.ChanMeas]
+				% Voltage
+				case 'aiVoltage'
 					obj.NITaskHandle = DAQmxCreateAIVoltageChan(obj.LibAlias,[],obj.PhyChan ,obj.Min ,obj.Max );
-				case 'ao'
+				case 'aoVoltage'
 					obj.NITaskHandle = DAQmxCreateAOVoltageChan(obj.LibAlias,[],obj.PhyChan ,obj.Min ,obj.Max );
+				% Current
+				case 'aiCurrent'
+					obj.NITaskHandle = DAQmxCreateAICurrentChan(obj.LibAlias,[],obj.PhyChan ,obj.Min ,obj.Max );
+				case 'aoCurrent'
+					obj.NITaskHandle = DAQmxCreateAOCurrentChan(obj.LibAlias,[],obj.PhyChan ,obj.Min ,obj.Max );
+				otherwise
+					error('Wrong in DAQmxCreate*Chan.');
 			end
 					
 		end
+
+		% Start task , for mode == f,c
 		function varargout=start(obj,varargin)
 			switch obj.ChanType
 				case 'ai'
 					switch obj.Mode
 						case 'Single'
 							aibg([],[],obj) ;
-						%case 'Finite'
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 							SetTiming(obj);
@@ -183,7 +219,6 @@ classdef daqmx_Task < handle
 				case 'ao'
 					switch obj.Mode
 						case 'Single'
-							
 							aobg([],[],obj) ;
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
@@ -193,78 +228,131 @@ classdef daqmx_Task < handle
 					end
 			end
 		end
-		
+
+		% Stop task , for mode == f,c
 		function varargout=stop(obj,varargin)
 			switch obj.ChanType
-				case 'ai'
+				case {'ai','ao'}
 					stop(obj.TimerHandle);
 					delete(obj.TimerHandle) ;
 					err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 					err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
-					
 			end
 		end
-		function varargout=read(obj,varargin)	% For single mode , read and output to argout .
+
+		% Read last part data.
+		function varargout=read(obj,varargin).
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
-			if ~strcmpi(obj.Mode,'Single')
-				error('read method only allow in "single" mode.');
+			%if ~strcmpi(obj.Mode,'Single')
+			%	error('read method only allow in "single" mode.');
+			%end
+			switch obj.Mode
+				case 'Single'
+					% daq read immediately.
+					aibg([],[],obj) ;
+					DataColumnLgc = ChanSelect(obj,varargin{:}) ; % don;t forget {:}
+					varargout = obj.DataStorage(DataColumnLgc) ;
+				case {'Finite','Continuous'}
+					% outout last part from .DataStorage
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
 			end
-			aibg([],[],obj) ;
-			if nargin > 1
-				DataColumnLgc = logical(zeros(1,ChanNum)) ;
-				for arg_i = 1:(nargin-1)
-					DataColumnLgc = DataColumnLgc | (sort(obj.ChanOccupancy) == obj.ChanOccupancy(strcmpi(obj.ChanAlias,varargin{arg_i} )) ) ;
-				end
-			else
-				DataColumnLgc = logical(ones(1,ChanNum)) ;
-			end
-			varargout = ChanObj.DataWindow_prop(DataColumnLgc) ;
 		end
-		
+		% Write data to .DataStorage (buffer in matlab).
 		function varargout=write(obj,varargin)	% For single mode
 			if nargin > obj.ChanNum+1
 				error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
 			end
+
+			
+			if mod(numel(obj.DataStorage), obj.ChanNum)	% it's should stop. Don't put adaptive code.
+				error('Output data length not same for each channel.');
+			end
+
+			outdata % temp var
+			
+			switch obj.Mode
+				case 'Single'
+					% daq write immediately.
+					
+					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					%varargout = obj.DataStorage(DataColumnLgc) ;
+
+					obj.DataStorage = outdata ;
+					aobg([],[],obj) ;
+				case {'Finite'}
+					% outout last part from .DataStorage
+					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
+					% append .DataStorage
+					if ~WriteLastData
+						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
+						obj.BufHead = 1 ;
+					end
+				case {'Continuous'}
+					if obj.CircBuf
+						% overwrite .DataStorage
+						obj.DataStorage = outdata ;
+						obj.BufHead = 1 ;
+					else
+						% append .DataStorage
+						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
+						obj.BufHead = 1 ;
+					end
+			end
+
+			
 			
 		end
-		% Output last part data.
-		function NewData=DataLastPart(obj)
-			NewData = obj.DataWindow_prop( end - obj.DataLastPartNum -1 : end , :) ;
-		end
 		
-		function out=DataWindow(obj,varargin)
-			if nargin == 1
-				out=obj.DataWindow_prop;
-			else
-				MatchChanID=find(strcmpi(obj.ChanAlias,varargin{1}));
-				out=obj.DataWindow_prop(:,MatchChanID);
+					% delete this function later
+					% Output last part data.
+					%function NewData=DataLastPart(obj)
+					%	NewData = obj.DataStorage( end - obj.DataLastPartNum -1 : end , :) ;
+					%end
+
+		% Get data from .DataStorage , similar read() but different when mode == f,c
+		% The aim of similar function is readability in other script..
+		function out=Data(obj,varargin)
+			if ~iscellstr(varargin)
+				error('Only allow string.') ;
+			end
+			switch obj.Mode
+				case 'Single'
+					% daq read immediately.
+					aibg([],[],obj) ;
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout = obj.DataStorage(DataColumnLgc) ;
+				case {'Finite','Continuous'}
+					% outout all data from .DataStorage
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout = obj.DataStorage(: ,DataColumnLgc) ;
 			end
 		end
 		
 		function ResetDev(obj)
 			err=calllib(obj.LibAlias,'DAQmxResetDevice',obj.DevName) ;
 		end
-		
-		
 	end
 end
 
+% Background analog intput
 function varargout=aibg(TimerObj,event,ChanObj)
 	NewData = DAQmxReadAnalogF64(ChanObj.LibAlias ,ChanObj.NITaskHandle, -1 , ChanObj.Timeout, ChanObj.DataLayout, ChanObj.ChanNum, ChanObj.SampleNum) ; % -1 == DAQmx_Val_Auto
 	% NewData is 1D data. Follow "if" block format to 2D data.
 	% Put each channel data to column(or "_y").
 	if strcmpi(ChanObj.Mode,'Single')
-		ChanObj.DataWindow_prop = NewData ;
+		ChanObj.DataStorage = NewData ;% add ' ?
 	else
 		ChanObj.DataTotalNumPerChan = ChanObj.DataTotalNumPerChan + size(NewData,1) ;
 		ChanObj.DataLastTime=(ChanObj.DataTotalNumPerChan-1)/ChanObj.Rate  ; % time of last data
-		ChanObj.DataWindow_prop=[ChanObj.DataWindow_prop ; NewData ]; 
-		DataWindow_y=size(ChanObj.DataWindow_prop , 1) ;
+		ChanObj.DataStorage=[ChanObj.DataStorage ; NewData ]; 
+		DataWindow_y=size(ChanObj.DataStorage , 1) ;
 		
 		if DataWindow_y > ChanObj.DataWindowLen
-			ChanObj.DataWindow_prop=ChanObj.DataWindow_prop(end-ChanObj.DataWindowLen+1 : end , :) ;
+			ChanObj.DataStorage=ChanObj.DataStorage(end-ChanObj.DataWindowLen+1 : end , :) ;
 			DataWindow_y=ChanObj.DataWindowLen;
 		end
 		ChanObj.DataLastPartNum=size(NewData,1); % for get last part data (last NewData) by index.
@@ -288,47 +376,40 @@ end
 % 10,000 - 1,000,000 S/s 	100 kS
 % > 1,000,000 S/s 			1 MS
 
+% Background analog outout
 function aobg(TimerObj,event,ChanObj)
-	if strcmpi(ChanObj.Mode,'Single')
-		if numel(obj.DataWindow_prop) < obj.ChanNum
-			obj.DataWindow_prop=[obj.DataWindow_prop, zeros(1,obj.ChanNum-numel(obj.DataWindow_prop))] ;
-		else
-			obj.DataWindow_prop=obj.DataWindow_prop(1:obj.ChanNum); ;
-		end
-		WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
-	else
-		if mod(numel(obj.DataWindow_prop), obj.ChanNum)
-			% it's should stop. Don't put adaptive code.
-			error('Output data length not same for each channel.');
-		end
-		
-	
-	%----------------- node == f
-	WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
-	
-	%----------------- node == c
-	
-		if obj.CircBuf
-			BufLen=length(obj.DataWindow_prop);
-			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, circshift(obj.DataWindow_prop,-obj.BufHead) );
-			obj.BufHead = mod(obj.BufHead+WrittenNum,BufLen);
-		else
-			
-			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataWindow_prop);
-			obj.DataWindow_prop = obj.DataWindow_prop(WrittenNum+1:end,:);
-		end
-	
-	
-	
+	% suppose mod(numel(obj.DataStorage), obj.ChanNum) == 0
+	% Only write from .DataStorage in this function.
+	% For performance reason, .DataStorage should prepared in call function (write() )
+	switch obj.Mode
+		case 'Single'
+			%if numel(obj.DataStorage) < obj.ChanNum
+			%	obj.DataStorage=[obj.DataStorage, zeros(1,obj.ChanNum-numel(obj.DataStorage))] ;
+			%else
+			%	obj.DataStorage=obj.DataStorage(1:obj.ChanNum); ;
+			%end
+			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage);
+		case {'Finite'}
+			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage(obj.BufHead:end,:) );
+			obj.BufHead = obj.BufHead + WrittenNum ;
+
+		case {'Continuous'}
+			if obj.CircBuf
+				BufLen=length(obj.DataStorage);
+				WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, circshift(obj.DataStorage,-obj.BufHead) );
+				obj.BufHead = mod(obj.BufHead+WrittenNum,BufLen);
+			else
+				WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage(obj.BufHead:end,:) );
+				obj.BufHead = obj.BufHead + WrittenNum ;
+			end
 	end
-	
-	
 	% TODO : should reshape or sort data ?
 	if ~isempty(ChanObj.CallbackFunc)
 		feval(ChanObj.CallbackFunc, ChanObj) % call user's function
 	end
 end
 
+% set Task timing
 function SetTiming(obj)
 	if ~isempty(obj.TimerHandle)
 		delete(obj.TimerHandle) ;
@@ -348,5 +429,17 @@ function SetTiming(obj)
 			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod) ;
 			
 			DAQmxCfgSampClkTiming(obj.LibAlias, obj.NITaskHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
+	end
+end
+
+% Localize selected channel column from read data set. 
+function DataColumnLgc = ChanSelect(obj,varargin)
+	if nargin > 1
+		DataColumnLgc = logical(zeros(1,obj.ChanNum)) ;
+		for arg_i = 1:(nargin-1)
+			DataColumnLgc = DataColumnLgc | (sort(obj.ChanOccupancy) == obj.ChanOccupancy(strcmpi(obj.ChanAlias,varargin{arg_i} )) ) ;
+		end
+	else
+		DataColumnLgc = logical(ones(1,obj.ChanNum)) ;
 	end
 end
