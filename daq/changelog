@@ -5,3 +5,4 @@ add some otherwise check to switch .
 add Current channel.
 todo add timer stop function(stop daq task)
 todo check aibg NewData shape in multichannel,single mode. does need transpose ?
+todo .write()
