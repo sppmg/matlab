@@ -1,12 +1,11 @@
 classdef daqmx_Task < handle
 	properties
 		ChanAlias ;
-		Mode = 'Single' ; % Mode = 'Single' | 'Finite' | 'Continuous'
-		Rate = 1000 ;
+
 		Max = 10 ;
 		Min = -10 ;
 		DataLayout = 1 ;	% DAQmx_Val_GroupByScanNumber = 1 ;
-		SampleNum = 200 ; % per channel,little more than 10 Hz update rate.
+		SampleNum = 200 ; % per channel,little more than 10 Hz update rate.when mode = f , it's total data.
 		Timeout = 5 ;
 		ProcPeriod = 0.1 ;
 		DataWindowLen = 1000 ; % unit = data number
@@ -26,10 +25,12 @@ classdef daqmx_Task < handle
 		ChanType ; % eg : ai / ao / di / do / etc ....
 		ChanMeas = 'Voltage' ; % Measure eg. V,I
 		ChanNum ;
-		ChanOccupancy ; 
+		ChanOccupancy ;
+		
+		Mode = 'Single' ; % Mode = 'Single' | 'Finite' | 'Continuous'
+		Rate = 1000 ;
 		
 		DataTime ; % storage time of each data
-		
 		
 		DataLastTime = 0 ;
 		DataLastPartNum = 0 ;
@@ -39,6 +40,8 @@ classdef daqmx_Task < handle
 		LibHeader = 'NIDAQmx-lite.h';
 		LibDll = 'C:\WINDOWS\system32\nicaiu.dll' ;
 		LibAlias = 'nidaqmx' ;
+
+		%StatusTaskRunning = 0 ;
 		
 	end
 	methods
@@ -200,7 +203,8 @@ classdef daqmx_Task < handle
 				otherwise
 					error('Wrong in DAQmxCreate*Chan.');
 			end
-					
+			
+			SetTiming(obj);
 		end
 
 		% Start task , for mode == f,c
@@ -212,7 +216,9 @@ classdef daqmx_Task < handle
 							aibg([],[],obj) ;
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-							SetTiming(obj);
+							if isempty(obj.TimerHandle)
+								SetTiming(obj);
+							end
 							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
@@ -222,7 +228,9 @@ classdef daqmx_Task < handle
 							aobg([],[],obj) ;
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-							SetTiming(obj);
+							if isempty(obj.TimerHandle)
+								SetTiming(obj);
+							end
 							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
@@ -234,12 +242,16 @@ classdef daqmx_Task < handle
 			switch obj.ChanType
 				case {'ai','ao'}
 					stop(obj.TimerHandle);
-					delete(obj.TimerHandle) ;
 					err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-					err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
 			end
 		end
-
+		
+		function delete(obj)
+			obj.stop;
+			err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
+			delete(obj.TimerHandle) ;
+		end
+		
 		% Read last part data.
 		function varargout=read(obj,varargin).
 			if ~iscellstr(varargin)
@@ -262,49 +274,67 @@ classdef daqmx_Task < handle
 		end
 		% Write data to .DataStorage (buffer in matlab).
 		function varargout=write(obj,varargin)	% For single mode
-			if nargin > obj.ChanNum+1
-				error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
+			if nargin > 2
+				%error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
+				error('"write" only allow 1 data set. Did not support set data to specify channel only.')
 			end
 
-			
-			if mod(numel(obj.DataStorage), obj.ChanNum)	% it's should stop. Don't put adaptive code.
-				error('Output data length not same for each channel.');
+			if nargin == 1
+				% .write() , send last data, it's should stored in obj.DataStorage
+								%switch obj.Mode
+								%	case 'Single'
+								%		aobg([],[],obj) ;
+								%	case 'Finite'
+								%	case 'Continuous'
+								%end
+				WriteLastData = 1 ;
+			else
+				% .write(data) , send specify data.
+				WriteLastData = 0 ; 
 			end
-
-			outdata % temp var
 			
 			switch obj.Mode
 				case 'Single'
 					% daq write immediately.
-					
+
 					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
 					%varargout = obj.DataStorage(DataColumnLgc) ;
-
-					obj.DataStorage = outdata ;
+					if ~WriteLastData
+						obj.DataStorage = varargin{1} ;
+					end
 					aobg([],[],obj) ;
-				case {'Finite'}
+				case 'Finite'
 					% outout last part from .DataStorage
 					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
 					%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
 					% append .DataStorage
 					if ~WriteLastData
-						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
-						obj.BufHead = 1 ;
-					end
-				case {'Continuous'}
-					if obj.CircBuf
-						% overwrite .DataStorage
-						obj.DataStorage = outdata ;
+						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;varargin{1}] ;
 						obj.BufHead = 1 ;
 					else
-						% append .DataStorage
-						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
 						obj.BufHead = 1 ;
 					end
+					aobg([],[],obj) ;
+					obj.start; % don't call .start if running ? because NIstoptask in .start
+				case 'Continuous'
+					% In continuous mode not support no argument.
+					if ~WriteLastData
+						if obj.CircBuf
+							% overwrite .DataStorage
+							obj.DataStorage = varargin{1} ;
+							obj.BufHead = 1 ;
+						else
+							% append .DataStorage
+							obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;varargin{1}] ;
+							obj.BufHead = 1 ;
+						end
+					end
 			end
-
 			
-			
+			% for multichannel function. not support now.
+			%if mod(numel(obj.DataStorage), obj.ChanNum)	% it's should stop. Don't put adaptive code.
+			%	error('Output data length not same for each channel.');
+			%end
 		end
 		
 					% delete this function later
@@ -335,6 +365,29 @@ classdef daqmx_Task < handle
 		function ResetDev(obj)
 			err=calllib(obj.LibAlias,'DAQmxResetDevice',obj.DevName) ;
 		end
+
+		function ChangeMode(obj,str)
+			obj.stop;
+			switch lower(str)
+				case {'single','s')
+					obj.Mode='Single';
+				case {'finite','f'}
+					obj.Mode = 'Finite' ;
+				case {'continuous','c'}
+					obj.Mode = 'Continuous' ;
+				otherwise
+					error('Mode string not allowed.');
+			end
+			SetTiming(obj);
+		end
+		function ChangeRate(obj,RateNum)
+			obj.stop;
+			if isnumeric(RateNum) && numel(RateNum) == 1
+				obj.Rate = RateNum ;
+			else
+				error('Wrong argument.');
+			end
+			SetTiming(obj);
 	end
 end
 
@@ -358,6 +411,12 @@ function varargout=aibg(TimerObj,event,ChanObj)
 		ChanObj.DataLastPartNum=size(NewData,1); % for get last part data (last NewData) by index.
 
 		ChanObj.DataTime=[ ChanObj.DataLastTime- (DataWindow_y-1) /ChanObj.Rate   : 1/ChanObj.Rate   : ChanObj.DataLastTime ]' ;
+		
+		if strcmpi(ChanObj.Mode,'Finite')
+			if ChanObj.DataTotalNumPerChan >= ChanObj.SampleNum
+				obj.stop;
+			end
+		end
 	end
 	%varargout={ChanObj};
 	if ~isempty(ChanObj.CallbackFunc)
@@ -366,7 +425,7 @@ function varargout=aibg(TimerObj,event,ChanObj)
 	
 end
 
-% ======== Buffer size ========
+% ======== NI Buffer size ========
 % Buffered writes require a minimum buffer size of 2 samples. If you do not configure the buffer size using DAQmxCfgOutputBuffer, NI-DAQmx automatically configures the buffer when you configure sample timing.
 % If the acquisition is finite , NI-DAQmx allocates a buffer equal in size to the value of samples per channel. 
 % If the acquisition is continuous, NI-DAQmx will allocate a buffer according to the following table: (S == Scan)
@@ -389,11 +448,11 @@ function aobg(TimerObj,event,ChanObj)
 			%	obj.DataStorage=obj.DataStorage(1:obj.ChanNum); ;
 			%end
 			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage);
-		case {'Finite'}
+		case 'Finite'
 			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage(obj.BufHead:end,:) );
 			obj.BufHead = obj.BufHead + WrittenNum ;
-
-		case {'Continuous'}
+			%TODO: put check task done here.
+		case 'Continuous'
 			if obj.CircBuf
 				BufLen=length(obj.DataStorage);
 				WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, circshift(obj.DataStorage,-obj.BufHead) );
@@ -409,10 +468,13 @@ function aobg(TimerObj,event,ChanObj)
 	end
 end
 
-% set Task timing
+% set Task timing and make matlab timer.
 function SetTiming(obj)
 	if ~isempty(obj.TimerHandle)
 		delete(obj.TimerHandle) ;
+	end
+	if strcmpi(Obj.Mode,'Single')
+		return ;
 	end
 	switch obj.ChanType
 		case 'ai'
