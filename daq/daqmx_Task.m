@@ -209,6 +209,9 @@ classdef daqmx_Task < handle
 
 		% Start task , for mode == f,c
 		function varargout=start(obj,varargin)
+			obj.DataLastTime = 0 ;
+			obj.DataLastPartNum = 0 ;
+			obj.DataTotalNumPerChan = 0 ;
 			switch obj.ChanType
 				case 'ai'
 					switch obj.Mode
@@ -266,7 +269,16 @@ classdef daqmx_Task < handle
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}) ; % don;t forget {:}
 					varargout = obj.DataStorage(DataColumnLgc) ;
-				case {'Finite','Continuous'}
+				case 'Finite'
+					% outout last part from .DataStorage
+					obj.start;
+					while numel(obj.DataTotalNumPerChan) <= 1
+						sleep(0.001); % maybe need wait 0.001 here.(matlab timer delay)
+					end
+					
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
+				case 'Continuous'
 					% outout last part from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
 					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
@@ -276,7 +288,7 @@ classdef daqmx_Task < handle
 		function varargout=write(obj,varargin)	% For single mode
 			if nargin > 2
 				%error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
-				error('"write" only allow 1 data set. Did not support set data to specify channel only.')
+				error('"write" only allow 1 data set. Did not support set data for specify channel.')
 			end
 
 			if nargin == 1
@@ -296,24 +308,21 @@ classdef daqmx_Task < handle
 			switch obj.Mode
 				case 'Single'
 					% daq write immediately.
-
-					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					%varargout = obj.DataStorage(DataColumnLgc) ;
+								%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+								%varargout = obj.DataStorage(DataColumnLgc) ;
 					if ~WriteLastData
 						obj.DataStorage = varargin{1} ;
 					end
 					aobg([],[],obj) ;
 				case 'Finite'
 					% outout last part from .DataStorage
-					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
+								%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+								%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
 					% append .DataStorage
 					if ~WriteLastData
 						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;varargin{1}] ;
-						obj.BufHead = 1 ;
-					else
-						obj.BufHead = 1 ;
 					end
+					obj.BufHead = 1 ;
 					aobg([],[],obj) ;
 					obj.start; % don't call .start if running ? because NIstoptask in .start
 				case 'Continuous'
@@ -355,7 +364,12 @@ classdef daqmx_Task < handle
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
 					varargout = obj.DataStorage(DataColumnLgc) ;
-				case {'Finite','Continuous'}
+				case 'Finite'
+					% outout all data from .DataStorage
+					obj.start;
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout = obj.DataStorage(: ,DataColumnLgc) ;
+				case 'Continuous'
 					% outout all data from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
 					varargout = obj.DataStorage(: ,DataColumnLgc) ;
@@ -473,7 +487,7 @@ function SetTiming(obj)
 	if ~isempty(obj.TimerHandle)
 		delete(obj.TimerHandle) ;
 	end
-	if strcmpi(Obj.Mode,'Single')
+	if strcmpi(obj.Mode,'Single')
 		return ;
 	end
 	switch obj.ChanType
