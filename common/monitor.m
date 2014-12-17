@@ -11,9 +11,10 @@ classdef monitor < handle
 		ParentHandle ;
 		AxesHandle ;
 		LineHandle ;
-		title ;
-		xlabel ;
-		ylabel ;
+		title = {};
+		xlabel = {};
+		ylabel = {};
+		ylim = {'auto'};
 	end
 	methods
 		function obj=monitor(varargin)
@@ -33,7 +34,7 @@ classdef monitor < handle
 			%obj.AxesHandle=[];
 			MaxPlotAxes = max([numel(obj.y),numel(obj.y2)]);
 			if (numel(obj.AxesHandle) ~= MaxPlotAxes && ~isempty(obj.AxesHandle))% & ishghandle(obj.AxesHandle)
-
+				delete(obj.LineHandle);
 				delete(obj.AxesHandle);
 				obj.AxesHandle=[];
 				obj.LineHandle=[];
@@ -47,7 +48,8 @@ classdef monitor < handle
 				obj.AxesHandle(axes_i)=subplot(MaxPlotAxes,1,axes_i,'Parent',obj.ParentHandle, ...
 					'XGrid','on','YGrid','on');
 			end
-
+			obj.ylim=repmat({'auto'},1,numel(obj.AxesHandle));
+			
 			%TODO: Did not write y2 code.
 			if numel(obj.x) == 1
 				for line_i=1:MaxPlotAxes		% Share x for each y set.
@@ -113,18 +115,51 @@ function ArgParser(obj,varargin)
 			else
 				switch lower( varargin{arg_i} )
 					case 'title'
-						obj.title=varargin{arg_i+1} ;
+						if isstr(varargin{arg_i+1})
+							obj.title={ varargin{arg_i+1} };
+						elseif iscellstr(varargin{arg_i+1})
+							obj.title=varargin{arg_i+1} ;
+						else
+							error('Only allow string.');
+						end
 						ResetLabel = 1 ;
 						arg_i=arg_i +1;
 					case 'xlabel'
-						obj.xlabel=varargin{arg_i+1} ;
+						if isstr(varargin{arg_i+1})
+							obj.xlabel={ varargin{arg_i+1} };
+						elseif iscellstr(varargin{arg_i+1})
+							obj.xlabel=varargin{arg_i+1} ;
+						else
+							error('Only allow string.');
+						end
 						ResetLabel = 1 ;
 						arg_i=arg_i +1;
 					case 'ylabel'
-						obj.ylabel=varargin{arg_i+1} ;
+						if isstr(varargin{arg_i+1})
+							obj.ylabel={ varargin{arg_i+1} };
+						elseif iscellstr(varargin{arg_i+1})
+							obj.ylabel=varargin{arg_i+1} ;
+						else
+							error('Only allow string.');
+						end
 						ResetLabel = 1 ;
 						arg_i=arg_i +1;
-					%case 'yLim'
+					case 'cll' % clear all label,title
+						obj.title=cell(1,numel(obj.AxesHandle));
+						obj.xlabel=cell(1,numel(obj.AxesHandle));
+						obj.ylabel=cell(1,numel(obj.AxesHandle));
+						ResetLabel = 1 ;
+					case 'ylim'
+						if isstr(varargin{arg_i+1}) 
+							if strcmpi(varargin(arg_i+1),'auto')
+								obj.ylim=repmat({'auto'},1,numel(obj.AxesHandle));
+							end
+						elseif iscellstr(varargin{arg_i+1})
+							% todo : did not check cell input.
+							obj.ylim=varargin{arg_i+1} ;
+						end
+						ChangeValueRange(obj);
+						arg_i=arg_i +1;
 					%otherwise
 				end
 			end
@@ -186,9 +221,26 @@ function ArgParser(obj,varargin)
 end
 
 function SetLabel(obj)
-	for fi=1:numel(AxesHandle)
-		title(obj.title{fi});
-		xlabel(obj.xlabel{fi});
-		ylabel(obj.ylabel{fi});
+	for fi=1:numel(obj.AxesHandle)
+		if fi <= numel(obj.title)
+			title(obj.AxesHandle(fi),obj.title{fi});
+		end
+		if fi <= numel(obj.xlabel)
+			xlabel(obj.AxesHandle(fi),obj.xlabel{fi});
+		end
+		if fi <= numel(obj.ylabel)
+			ylabel(obj.AxesHandle(fi),obj.ylabel{fi});
+		end
 	end
 end
+
+function ChangeValueRange(obj)
+	for fi=1:numel(obj.AxesHandle)
+		if fi <= numel(obj.ylim)
+			if ~isempty(obj.ylim{fi})
+				ylim(obj.AxesHandle(fi),obj.ylim{fi});
+			end
+		end
+	end
+end
+	

@@ -14,6 +14,7 @@ classdef daqmx_Task < handle
 		
 		CircBuf = 0 ; % Circulary buffer of write (ao)
 		BufHead = 1 ; % Head pointer for write buffer, next write data.
+		UserData ;
 	end
 	
 	properties (SetAccess = private)
@@ -46,14 +47,14 @@ classdef daqmx_Task < handle
 	end
 	methods
 		function obj=daqmx_Task(varargin)
-			obj.LibAlias = daqmx_loadlib ;
+			%obj.LibAlias = daqmx_loadlib ;
 			ModeAlreadySet = 0 ;
 			
 			% Load lib
 			if ~libisloaded(obj.LibAlias)
 				% [daqmx_library_fpath, daqmx_library_fname, daqmx_library_fext] = fileparts(daqmx.set.library) ;
-				disp(['Matlab: Loading library from ',library])
-				[notfound,warnings] = loadlibrary(library, header,'alias',lib);
+				disp(['Matlab: Loading library from ',obj.LibDll ])
+				[notfound,warnings] = loadlibrary(obj.LibDll , obj.LibHeader ,'alias',obj.LibAlias );
 			end
 			disp('Matlab: dll loaded')
 			
@@ -67,7 +68,7 @@ classdef daqmx_Task < handle
 						case 'chantype'
 							obj.ChanType = varargin{arg_i+1} ;
 							switch lower(varargin{arg_i+1})
-								case {'ai')
+								case {'ai'}
 									obj.ChanType = 'ai';
 								case {'ao'}
 									obj.ChanType = 'ao' ;
@@ -76,7 +77,7 @@ classdef daqmx_Task < handle
 							end
 						case 'chanmeas'
 							switch lower(varargin{arg_i+1})
-								case {'voltage','v')
+								case {'voltage','v'}
 									obj.ChanMeas = 'Voltage';
 								case {'current','i'}
 									obj.ChanMeas = 'Current' ;
@@ -92,7 +93,7 @@ classdef daqmx_Task < handle
 						case 'mode'
 							% Allow use  s,f,c
 							switch lower(varargin{arg_i+1})
-								case {'single','s')
+								case {'single','s'}
 									obj.Mode='Single';
 								case {'finite','f'}
 									obj.Mode = 'Finite' ;
@@ -179,7 +180,7 @@ classdef daqmx_Task < handle
 			
 			if numel(obj.ChanAlias) > 0 && numel(obj.ChanAlias) <= numel(obj.ChanOccupancy)
 				tmp=cell(1,numel(obj.ChanOccupancy));
-				tmp(1:numel(obj.ChanAlias))=obj.ChanAlias
+				tmp(1:numel(obj.ChanAlias))=obj.ChanAlias ;
 				obj.ChanAlias=tmp;	% <^-- add [] after alias cell array.
 			end
 			if numel(obj.ChanAlias) > numel(obj.ChanOccupancy)
@@ -188,6 +189,12 @@ classdef daqmx_Task < handle
 			obj.ChanNum=numel(obj.ChanOccupancy); % It's for fast get number.
 			
 			% --------------------------------
+			if iscellstr(obj.ChanType)
+				obj.ChanType = obj.ChanType{:} ;
+			end
+			if iscellstr(obj.DevName)
+				obj.DevName = obj.DevName{:} ;
+			end
 			
 			switch [obj.ChanType,obj.ChanMeas]
 				% Voltage
@@ -241,7 +248,7 @@ classdef daqmx_Task < handle
 		end
 
 		% Stop task , for mode == f,c
-		function varargout=stop(obj,varargin)
+		function stop(obj)
 			switch obj.ChanType
 				case {'ai','ao'}
 					stop(obj.TimerHandle);
@@ -256,7 +263,7 @@ classdef daqmx_Task < handle
 		end
 		
 		% Read last part data.
-		function varargout=read(obj,varargin).
+		function varargout=read(obj,varargin)
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
@@ -268,20 +275,20 @@ classdef daqmx_Task < handle
 					% daq read immediately.
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}) ; % don;t forget {:}
-					varargout = obj.DataStorage(DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(DataColumnLgc) ;
 				case 'Finite'
 					% outout last part from .DataStorage
 					obj.start;
 					while numel(obj.DataTotalNumPerChan) <= 1
-						sleep(0.001); % maybe need wait 0.001 here.(matlab timer delay)
+						pause(0.001); % maybe need wait 0.001 here.(matlab timer delay)
 					end
 					
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
 				case 'Continuous'
 					% outout last part from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
 			end
 		end
 		% Write data to .DataStorage (buffer in matlab).
@@ -354,7 +361,7 @@ classdef daqmx_Task < handle
 
 		% Get data from .DataStorage , similar read() but different when mode == f,c
 		% The aim of similar function is readability in other script..
-		function out=Data(obj,varargin)
+		function varargout=Data(obj,varargin)
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
@@ -363,16 +370,16 @@ classdef daqmx_Task < handle
 					% daq read immediately.
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(DataColumnLgc) ;
 				case 'Finite'
 					% outout all data from .DataStorage
 					obj.start;
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(: ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(: ,DataColumnLgc) ;
 				case 'Continuous'
 					% outout all data from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(: ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(: ,DataColumnLgc) ;
 			end
 		end
 		
@@ -383,7 +390,7 @@ classdef daqmx_Task < handle
 		function ChangeMode(obj,str)
 			obj.stop;
 			switch lower(str)
-				case {'single','s')
+				case {'single','s'}
 					obj.Mode='Single';
 				case {'finite','f'}
 					obj.Mode = 'Finite' ;
@@ -402,6 +409,7 @@ classdef daqmx_Task < handle
 				error('Wrong argument.');
 			end
 			SetTiming(obj);
+		end
 	end
 end
 
