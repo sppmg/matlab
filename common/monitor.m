@@ -1,4 +1,3 @@
-% monitor
 classdef monitor < handle
 	properties
 		%CheckArg = 1 ;
@@ -64,7 +63,9 @@ classdef monitor < handle
 						'LineStyle',':','Marker','+','Color',obj.cm(line_i,:),...
 						'Parent',obj.AxesHandle(line_i));
 						% 'DisplayName',num2str(line_i), <-- for legend , will slow.
-					set(obj.AxesHandle(line_i),'XLim',[obj.x{line_i}(1),obj.x{line_i}(end)] ) ;
+                    if obj.x{line_i}(1) < obj.x{line_i}(end)
+                        set(obj.AxesHandle(line_i),'XLim',[obj.x{line_i}(1),obj.x{line_i}(end)] ) ;
+                    end
 				end
 			end
 		end
@@ -79,12 +80,17 @@ classdef monitor < handle
 				if numel(obj.x) == 1		% "for" inside of "if" for speed.
 					for line_i=1:numel(obj.LineHandle)
 						set(obj.LineHandle(line_i),'XData',obj.x{1},'YData',obj.y{line_i}) ;
-						set(obj.AxesHandle(line_i),'XLim',[obj.x{1}(1),obj.x{1}(end)] ) ;
+                        
+                        if obj.x{1}(1) < obj.x{1}(end)
+                            set(obj.AxesHandle(line_i),'XLim',[obj.x{1}(1),obj.x{1}(end)] ) ;
+                        end
 					end
 				else
 					for line_i=1:numel(obj.LineHandle)
 						set(obj.LineHandle(line_i),'XData',obj.x{line_i},'YData',obj.y{line_i}) ;
-						set(obj.AxesHandle(line_i),'XLim',[obj.x{line_i}(1),obj.x{line_i}(end)] ) ;
+                        if obj.x{line_i}(1) < obj.x{line_i}(end)
+                            set(obj.AxesHandle(line_i),'XLim',[obj.x{line_i}(1),obj.x{line_i}(end)] ) ;
+                        end
 					end
 				end
 			end
@@ -243,4 +249,3 @@ function ChangeValueRange(obj)
 		end
 	end
 end
-	
