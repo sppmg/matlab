@@ -9,8 +9,8 @@ function DemoProc(obj)
 		daq.ResetDev;
 		daq.start;
 		pause(10);
-		%figure; plot(daq.DataTime , daq.Data); % plot 3 lines of each channel .
-		%figure; plot(daq.DataTime , daq.Data('a') ); % plot ecg_ra only .
+		%figure; plot(daq.DataTime , daq.data); % plot 3 lines of each channel .
+		%figure; plot(daq.DataTime , daq.data('a') ); % plot ecg_ra only .
 		daq.stop;
 	else
 		% Careful , this section variable scope is different with above.
@@ -18,10 +18,10 @@ function DemoProc(obj)
 			if ~isa(mon,'monitor')
 				% Initialization
 				fig=figure('Renderer','OpenGL') ;
-				mon=monitor(fig,obj.DataTime,obj.Data('a'));
+				mon=monitor(fig,obj.DataTime,obj.data('a'));
 			else
 				% Action when every loop , call by timer .
-				mon.plot(obj.DataTime,obj.Data('a'));
+				mon.plot(obj.DataTime,obj.data('a'));
 			end
 		end
 	end

@@ -10,8 +10,8 @@ function ECGProc(obj)
 		daq.ResetDev;
 		daq.start;
 		%pause(10);
-		%figure; plot(daq.DataTime , daq.Data); % plot 3 lines of each channel .
-		%figure; plot(daq.DataTime , daq.Data('a') ); % plot ecg_ra only .
+		%figure; plot(daq.DataTime , daq.data); % plot 3 lines of each channel .
+		%figure; plot(daq.DataTime , daq.data('a') ); % plot ecg_ra only .
 		%daq.stop;
 	else
 		% Careful , this section variable scope is different with above.
@@ -20,12 +20,12 @@ function ECGProc(obj)
 				% Initialization
 				fig=figure('Renderer','OpenGL') ;
 				peakhigh=uicontrol('style','edit','string','0.5');
-				mon=monitor(fig,obj.DataTime,obj.Data);
+				mon=monitor(fig,obj.DataTime,obj.data);
 			else
 				% Action when every loop , call by timer .
 				if obj.DataTime(end) > 10
 					peak_high=str2num(get(peakhigh,'string')) ;
-					[pks,locs] =findpeaks(sign(peak_high)*obj.Data,'MINPEAKHEIGHT',abs(peak_high),'MINPEAKDISTANCE',0.18*obj.Rate);
+					[pks,locs] =findpeaks(sign(peak_high)*obj.data,'MINPEAKHEIGHT',abs(peak_high),'MINPEAKDISTANCE',0.18*obj.Rate);
 					ibi=[obj.DataTime(locs(2:end)), diff(obj.DataTime(locs),1)];
 					mstd=movingstd(ibi(:,2),5,'c');
 					%mstd=ibi(:,2);
@@ -33,7 +33,7 @@ function ECGProc(obj)
 					ibi=[0,0];
 					mstd=ibi(:,2);
 				end
-				mon.plot(fig,{obj.DataTime,ibi(:,1),ibi(:,1)},{obj.Data,ibi(:,2),mstd });
+				mon.plot(fig,{obj.DataTime,ibi(:,1),ibi(:,1)},{obj.data,ibi(:,2),mstd });
 			end
 		end
 	end

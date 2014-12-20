@@ -361,7 +361,7 @@ classdef daqmx_Task < handle
 
 		% Get data from .DataStorage , similar read() but different when mode == f,c
 		% The aim of similar function is readability in other script..
-		function varargout=Data(obj,varargin)
+		function varargout=data(obj,varargin)
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
