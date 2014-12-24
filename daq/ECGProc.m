@@ -6,7 +6,7 @@ function ECGProc(obj)
 		clear classes;
 		daq = daqmx_Task('chan','dev1/ai1','rate',1000,'callbackfunc','ECGProc','ProcPeriod',0.2);
 		daq.DataWindowLen = 120*daq.Rate ;			% store 120 sec. data in object.
-		daq.SampleNum=3*daq.Rate*daq.ProcPeriod;	% 3 times ProcPeriod buffer.
+		daq.SampleNum=round(3*daq.Rate*daq.ProcPeriod);	% 3 times ProcPeriod buffer.
 		daq.ResetDev;
 		daq.start;
 		%pause(10);
