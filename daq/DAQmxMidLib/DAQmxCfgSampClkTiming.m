@@ -12,4 +12,4 @@ source=''; %internal clock
 DAQmx_Val_Rising = 10280; % Rising
 DAQmx_Val_Falling =10171; % Falling
 
-[err,b]=calllib(lib,'DAQmxCfgSampClkTiming',taskh,source,rate,DAQmx_Val_Rising,sampleMode,sampsPerChanToAcquire);
+err = calllib(lib,'DAQmxCfgSampClkTiming',taskh,source,rate,DAQmx_Val_Rising,sampleMode,sampsPerChanToAcquire);
