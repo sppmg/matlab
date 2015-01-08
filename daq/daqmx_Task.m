@@ -5,7 +5,7 @@ classdef daqmx_Task < handle
 		Max = 10 ;
 		Min = -10 ;
 		DataLayout = 1 ;	% DAQmx_Val_GroupByScanNumber = 1 ;
-		SampleNum ; % per channel, effect like a buffer in matlab.When mode = f , it's means total data number.
+		SampleNum ; % per channel, effect like a buffer in matlab.
 		%little more than 10 Hz update rate.
 		SampleNumTotal ; % Only affect in finite mode.
 		Timeout = 5 ;
@@ -450,8 +450,8 @@ function varargout=aibg(TimerObj,event,ChanObj)
 		ChanObj.DataStorage = NewData ;% add ' ?
 	else
 		% Adapted buffer.
-		if strcmpi(ChanObj.Mode,'Continuous') && ( ChanObj.SampleNum-size(NewData,1) ) < ChanObj.SampleNum*0.2
-			ChanObj.SampleNum = round( ChanObj.SampleNum * 1.2 ) ;
+		if  size(NewData,1) > ChanObj.SampleNum*0.8
+			ChanObj.SampleNum = ceil( ChanObj.SampleNum * 1.2 ) ;
 		end
 		ChanObj.DataTotalNumPerChan = ChanObj.DataTotalNumPerChan + size(NewData,1) ;
 		ChanObj.DataLastTime=(ChanObj.DataTotalNumPerChan-1)/ChanObj.Rate  ; % time of last data
@@ -541,11 +541,11 @@ function SetTiming(obj)
 	end
 	switch obj.Mode
 		case 'Finite'
-			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'TasksToExecute',ceil(obj.SampleNumTotal/obj.Rate/obj.ProcPeriod )+1,'StopFcn',@obj.stop);
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'TasksToExecute',ceil(obj.SampleNumTotal/obj.Rate/obj.ProcPeriod )+1,'StopFcn',@(~,~)obj.stop);
 			DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNumTotal); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples , Total data number set in SampleNumTotal
 		case 'Continuous'
 			
-			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'StopFcn',@obj.stop) ;
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'StopFcn',@(~,~)obj.stop) ;
 			
 			DAQmxCfgSampClkTiming(obj.LibAlias, obj.NITaskHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
 	end

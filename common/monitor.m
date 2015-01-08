@@ -1,4 +1,5 @@
 classdef monitor < handle
+	% note : get figure number > numel(findobj('Type','figure'))
 	properties
 		%CheckArg = 1 ;
 	end

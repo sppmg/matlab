@@ -4,7 +4,57 @@ ecg = daqmx_task('chan','dev2/ai0:2','alias',{'ecg_ra','ecg_v','lvp'},'rate',400
 ecg.ResetDev
 ecg.start
 
-figure; plot(ecg.DataTime , ecg.DataWindow); % plot 3 lines of each channel .
-figure; plot(ecg.DataTime , ecg.DataWindow('ecg_ra') ); % plot ecg_ra only .
+figure; plot(ecg.DataTime , ecg.Data); % plot 3 lines of each channel .
+figure; plot(ecg.DataTime , ecg.Data('ecg_ra') ); % plot ecg_ra only .
 
 ecg.stop
+
+
+chan	'dev1/ai0:2'
+		{'dev1/ai0:2','dev1/ai5:8','dev1/ai4'}
+alias	'in_1'
+		{'in_1','in_2','in_3'}		% alias number must less than channel name. you can use [] to skip.
+
+%%% AI example %%%
+% In case of daq is DAQmx object .
+
+% Reset device of object
+daq.ResetDev
+
+% Start task. For mode == {'Finite' , 'Continuous'}
+daq.start
+	% data will save in daq.DataStorage, use Data method to read. use alias get specific channel.
+	daq.DataTime
+	daq.Data
+	daq.Data('alias1','alias2')
+
+
+% Stop task
+daq.stop
+
+% if mode == 'Single', no need start/stop task
+% Data will save in daq.DataStorage and output
+data=daq.read
+data=daq.read('alias1','alias2')
+
+
+%%% AO example %%%
+% Here only show difference between AI.
+% Output data put in daq.DataStorage
+daq.start
+daq.DataStorage = output_1
+
+% Use write method
+% output_s element number >= channel number
+% output_c element number == channel number * n
+
+% For mode == 'Single'
+daq.write(output_s) 
+daq.write('alias1',3)
+
+% For mode == {'Finite' , 'Continuous'} , it's will batter than modify DataStorage , because data maybe didn't output to  NI buffer.
+daq.write(output_1) 
+daq.write('alias1',output_1)
+
+% In writting, you can set circulary buffer. For example, you can put a sin or other period data in daq.DataStorage , and object will output this signal.
+daq.CircBuf=1
