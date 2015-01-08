@@ -3,7 +3,7 @@ function taskh = DAQmxCreateAIVoltageChan(lib,taskh,PhysicalChannel,Vmin,Vmax)
 %  Purpose
 %  Creates channel(s) to measure voltage and adds the channel(s) to the task you specify with taskHandle. If your measurement requires the use of internal excitation or you need the voltage to be scaled by excitation, call DAQmxCreateAIVoltageChanWithExcit.
 %
-%  C function prototype
+%  C function
 %  int32 DAQmxCreateAIVoltageChan (TaskHandle taskHandle, const char physicalChannel[], const char nameToAssignToChannel[], int32 terminalConfig, float64 minVal, float64 maxVal, int32 units, const char customScaleName[]);
 
 

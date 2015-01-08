@@ -21,12 +21,9 @@ function data = DAQmxReadAnalogF64(lib,taskh,numSampsPerChan,timeout,fillMode,nu
 % whos taskh
 % taskh.Value
 
-readarray = zeros(numchan,numsample); readarray_ptr=libpointer('doublePtr',readarray);
+readarray_ptr=libpointer('doublePtr',zeros(numchan,numsample));
 sampread_ptr=libpointer('int32Ptr',0);
 empty_ptr=libpointer('uint32Ptr',[]);
-
-%sampread=0; sampread_ptr=libpointer('int32Ptr',sampread);
-%empty=[]; empty_ptr=libpointer('uint32Ptr',empty);
 
 arraylength=numsample*numchan; % more like 'buffersize'
 
