@@ -31,7 +31,7 @@ function ECGProc(daq)
 				% Action when every loop , call by timer .
 				ana.rt_peakHigh = str2num(get(ui.peakHigh_edt,'string')) ;
 				[pks,locs] = findpeaks( sign(ana.rt_peakHigh)*daq.data, 'MINPEAKHEIGHT', abs(ana.rt_peakHigh), 'MINPEAKDISTANCE', ana.rt_peakMinInterval * daq.Rate);
-				if numel(locs) > 2
+				if length(locs) > 2
 					ibi=[daq.DataTime(locs(2:end)), diff(daq.DataTime(locs),1)];
 					if numel(ibi) > (2* ana.rt_msdDataLen+1)  % check for movingstd ()
 						mstd=movingstd(ibi(:,2), ana.rt_msdDataLen,'c');
