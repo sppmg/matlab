@@ -7,8 +7,8 @@ tic;
 %%%%%% Set user var here %%%%%
 %------- experiment var
 sampling_rate = 4000 ;			% our : rat=4000 ; frog = 500
-peak_interval_min_sec = 0.4 ;	% for findpeak; suggestion rat=0.1*sampling_rate ,frog=0.3*sampling_rate
-peak_height_min = -0.5;		% for findpeak ,allowed <0
+peak_interval_min_sec = 0.3 ;	% for findpeak; suggestion rat=0.1*sampling_rate ,frog=0.3*sampling_rate
+peak_height_min = 0.3;		% for findpeak ,allowed <0
 extremum_drop_condition = 3 ;		% times of sigma
 
 raw_ch_time=1 ;
@@ -264,8 +264,6 @@ for fi=1:length(file)
 		ibi_outliers=ibi(ibi_outliers_inx,:);
 		ibi( ibi_outliers_inx ,:)=[];
 		[mu_hat, sigma_hat] = normfit(ibi(:,2));
-	%else
-	%	ibi_outliers=[0,0];	% check : can we set [] ?
 	end
 	
 	

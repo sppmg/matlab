@@ -28,12 +28,14 @@ end
 numSampsPerChan = numel(writeArray)/numChan;
 
 writeArray_ptr=libpointer('doublePtr',writeArray);
-sampsPerChanWritten=0;sampsPerChanWritten_ptr=libpointer('int32Ptr',sampsPerChanWritten);
-empty=[]; empty_ptr=libpointer('uint32Ptr',empty);
+sampsPerChanWritten_ptr=libpointer('int32Ptr',0);
+empty_ptr=libpointer('uint32Ptr',[]);
+%sampsPerChanWritten=0;sampsPerChanWritten_ptr=libpointer('int32Ptr',sampsPerChanWritten);
+%empty=[]; empty_ptr=libpointer('uint32Ptr',empty);
 
-[err,sampsPerChanWritten]=calllib(lib,'DAQmxWriteAnalogF64',...
+err = calllib(lib,'DAQmxWriteAnalogF64',...
 		taskh,numSampsPerChan,1,timeout,dataLayout,...
 		writeArray_ptr,sampsPerChanWritten_ptr,empty_ptr);
 DAQmxCheckError(lib,err);
 
-numwritten =get(sampsPerChanWritten_ptr,'Value');
+numwritten = sampsPerChanWritten_ptr.Value;

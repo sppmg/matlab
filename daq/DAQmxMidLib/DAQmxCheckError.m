@@ -1,7 +1,5 @@
 function DAQmxCheckError(lib,err)
-% return
-% function DAQmxCheckError(lib,err)
-% 
+
 % read error code 
 %	zero means no error - does nothing
 %	nonzero - find out error string and generate error

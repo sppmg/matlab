@@ -1,20 +1,22 @@
 classdef daqmx_Task < handle
 	properties
 		ChanAlias ;
-		Mode = 'Single' ; % Mode = 'Single' | 'Finite' | 'Continuous'
-		Rate = 1000 ;
+
 		Max = 10 ;
 		Min = -10 ;
 		DataLayout = 1 ;	% DAQmx_Val_GroupByScanNumber = 1 ;
-		SampleNum = 200 ; % per channel,little more than 10 Hz update rate.
+		SampleNum ; % per channel, effect like a buffer in matlab.
+		%little more than 10 Hz update rate.
+		SampleNumTotal ; % Only affect in finite mode.
 		Timeout = 5 ;
-		ProcPeriod = 0.1 ;
+		ProcPeriod = 0.2 ; % Period of NI buffer r/w and user callback.
 		DataWindowLen = 1000 ; % unit = data number
 		
-		CallbackFunc ; 
+		CallbackFunc ; % Callback function name, string.
 		
 		CircBuf = 0 ; % Circulary buffer of write (ao)
 		BufHead = 1 ; % Head pointer for write buffer, next write data.
+		UserData ;
 	end
 	
 	properties (SetAccess = private)
@@ -26,10 +28,12 @@ classdef daqmx_Task < handle
 		ChanType ; % eg : ai / ao / di / do / etc ....
 		ChanMeas = 'Voltage' ; % Measure eg. V,I
 		ChanNum ;
-		ChanOccupancy ; 
+		ChanOccupancy ;
+		
+		Mode ; % Mode = 'Single' | 'Finite' | 'Continuous'
+		Rate ;
 		
 		DataTime ; % storage time of each data
-		
 		
 		DataLastTime = 0 ;
 		DataLastPartNum = 0 ;
@@ -39,18 +43,16 @@ classdef daqmx_Task < handle
 		LibHeader = 'NIDAQmx-lite.h';
 		LibDll = 'C:\WINDOWS\system32\nicaiu.dll' ;
 		LibAlias = 'nidaqmx' ;
+
+		%StatusTaskRunning = 0 ;
 		
 	end
 	methods
 		function obj=daqmx_Task(varargin)
-			obj.LibAlias = daqmx_loadlib ;
-			ModeAlreadySet = 0 ;
-			
 			% Load lib
 			if ~libisloaded(obj.LibAlias)
-				% [daqmx_library_fpath, daqmx_library_fname, daqmx_library_fext] = fileparts(daqmx.set.library) ;
-				disp(['Matlab: Loading library from ',library])
-				[notfound,warnings] = loadlibrary(library, header,'alias',lib);
+				disp(['Matlab: Loading library from ',obj.LibDll ])
+				[notfound,warnings] = loadlibrary(obj.LibDll , obj.LibHeader ,'alias',obj.LibAlias );
 			end
 			disp('Matlab: dll loaded')
 			
@@ -59,12 +61,10 @@ classdef daqmx_Task < handle
 					switch lower( varargin{arg_i} )
 						case 'chan'
 							obj.PhyChan = varargin{arg_i+1} ;
-							% Check 
-							% move follow code out of phaser because it will map with alias.
 						case 'chantype'
 							obj.ChanType = varargin{arg_i+1} ;
 							switch lower(varargin{arg_i+1})
-								case {'ai')
+								case {'ai'}
 									obj.ChanType = 'ai';
 								case {'ao'}
 									obj.ChanType = 'ao' ;
@@ -73,7 +73,7 @@ classdef daqmx_Task < handle
 							end
 						case 'chanmeas'
 							switch lower(varargin{arg_i+1})
-								case {'voltage','v')
+								case {'voltage','v'}
 									obj.ChanMeas = 'Voltage';
 								case {'current','i'}
 									obj.ChanMeas = 'Current' ;
@@ -82,14 +82,11 @@ classdef daqmx_Task < handle
 							end
 						
 						case 'alias'
-							% TODO
-							% check ChanAlias is unique and mutch PhyChan
 							obj.ChanAlias = varargin{arg_i+1} ;
-							
 						case 'mode'
 							% Allow use  s,f,c
 							switch lower(varargin{arg_i+1})
-								case {'single','s')
+								case {'single','s'}
 									obj.Mode='Single';
 								case {'finite','f'}
 									obj.Mode = 'Finite' ;
@@ -98,32 +95,34 @@ classdef daqmx_Task < handle
 								otherwise
 									error('Mode string not allowed.');
 							end
-							ModeAlreadySet = 1 ;
 						case 'rate'
 							% 'Finite' or 'Continuous' mode , if did not set SampleNum , default is 'Continuous' .
-							obj.Rate = varargin{arg_i+1} ;
-							if isempty(obj.Mode) || strcmpi(obj.Mode,'Single')
-								if ~ModeAlreadySet
-									obj.Mode = 'Continuous' ;
-								end
-								obj.SampleNum = round(obj.Rate/5) ;
-								
+							if isnumeric(varargin{arg_i+1})
+								obj.Rate = varargin{arg_i+1} ;
+							else
+								error('Rate should be numeric.');
 							end
-							if isempty(obj.ProcPeriod)
-								obj.ProcPeriod = round(1/obj.Rate) ;
-							end
+							
 						case 'samplenum'
 							% 'Finite' or 'Continuous' mode , default is 'Finite' .
-							if isempty(obj.Mode) || strcmpi(obj.Mode,'Single')
-								if ~ModeAlreadySet
-									obj.Mode = 'Finite' ;
+							if isnumeric(varargin{arg_i+1})
+								if mod(varargin{arg_i+1},1)
+									error('SampleNum should be interger.');
 								end
+								obj.SampleNum = varargin{arg_i+1} ;
 							end
-							obj.SampleNum = varargin{arg_i+1} ;
 						case 'max'
-							obj.Max = varargin{arg_i+1} ;
+							if isnumeric(varargin{arg_i+1})
+								obj.Max = varargin{arg_i+1} ;
+							else
+								error('Max should be numeric.');
+							end
 						case 'min'
-							obj.Min = varargin{arg_i+1} ;
+							if isnumeric(varargin{arg_i+1})
+								obj.Min = varargin{arg_i+1} ;
+							else
+								error('Min should be numeric.');
+							end
 						case 'procperiod'
 							% should > 0.001 s , matlab timer limit.
 							if varargin{arg_i+1} <= 0.001
@@ -138,7 +137,7 @@ classdef daqmx_Task < handle
 					end
 				end % for each arg
 			end % if nargin > 0
-			% ----------- PhyChan,Alias parser---------
+			% ----------- PhyChan,Alias parser ---------
 			if isempty(obj.PhyChan)
 				error('Please specify physical channel name. eg, "Dev1/ai0:3" .');
 			elseif ischar(obj.PhyChan)
@@ -176,7 +175,7 @@ classdef daqmx_Task < handle
 			
 			if numel(obj.ChanAlias) > 0 && numel(obj.ChanAlias) <= numel(obj.ChanOccupancy)
 				tmp=cell(1,numel(obj.ChanOccupancy));
-				tmp(1:numel(obj.ChanAlias))=obj.ChanAlias
+				tmp(1:numel(obj.ChanAlias))=obj.ChanAlias ;
 				obj.ChanAlias=tmp;	% <^-- add [] after alias cell array.
 			end
 			if numel(obj.ChanAlias) > numel(obj.ChanOccupancy)
@@ -184,7 +183,44 @@ classdef daqmx_Task < handle
 			end
 			obj.ChanNum=numel(obj.ChanOccupancy); % It's for fast get number.
 			
-			% --------------------------------
+			% ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+			% -------- Automatically determine mode -------
+			if isempty(obj.Mode)
+				if ~isempty(obj.SampleNum) && ~isempty(obj.Rate)
+					obj.Mode = 'Finite' ;
+					if isempty(obj.ProcPeriod)
+						obj.ProcPeriod = obj.SampleNum / obj.Rate * 1.1 ; % once
+						if obj.ProcPeriod < 0.001
+							obj.ProcPeriod = 0.001 ; % matlab limit.
+						end
+					end
+					if isempty(obj.DataWindowLen)
+						obj.DataWindowLen = 10*obj.Rate ;
+					end
+					if isempty(obj.SampleNumTotal)
+						obj.SampleNumTotal = obj.SampleNum ;
+					end
+				elseif isempty(obj.SampleNum) && ~isempty(obj.Rate)
+					obj.Mode = 'Continuous' ;
+					if isempty(obj.ProcPeriod)
+						obj.ProcPeriod = 0.1;
+					end
+					obj.SampleNum = 3 * obj.Rate * obj.ProcPeriod ;
+					if isempty(obj.DataWindowLen)
+						obj.DataWindowLen = 10*obj.Rate ;
+					end
+				else
+					obj.Mode = 'Single' ;
+				end
+			end
+			% ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+				
+			if iscellstr(obj.ChanType)
+				obj.ChanType = obj.ChanType{:} ;
+			end
+			if iscellstr(obj.DevName)
+				obj.DevName = obj.DevName{:} ;
+			end
 			
 			switch [obj.ChanType,obj.ChanMeas]
 				% Voltage
@@ -200,11 +236,17 @@ classdef daqmx_Task < handle
 				otherwise
 					error('Wrong in DAQmxCreate*Chan.');
 			end
-					
+			
+			SetTiming(obj);
 		end
 
 		% Start task , for mode == f,c
 		function varargout=start(obj,varargin)
+			obj.DataLastTime = 0 ;
+			obj.DataLastPartNum = 0 ;
+			obj.DataTotalNumPerChan = 0 ;
+			obj.SampleNum = round( obj.SampleNum ) ; % force set to interger.
+			obj.DataWindowLen = round ( obj.DataWindowLen ) ;
 			switch obj.ChanType
 				case 'ai'
 					switch obj.Mode
@@ -212,7 +254,9 @@ classdef daqmx_Task < handle
 							aibg([],[],obj) ;
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-							SetTiming(obj);
+							if isempty(obj.TimerHandle)
+								SetTiming(obj);
+							end
 							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
@@ -222,7 +266,9 @@ classdef daqmx_Task < handle
 							aobg([],[],obj) ;
 						case {'Finite' , 'Continuous'}
 							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-							SetTiming(obj);
+							if isempty(obj.TimerHandle)
+								SetTiming(obj);
+							end
 							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
@@ -230,18 +276,22 @@ classdef daqmx_Task < handle
 		end
 
 		% Stop task , for mode == f,c
-		function varargout=stop(obj,varargin)
+		function stop(obj)
 			switch obj.ChanType
 				case {'ai','ao'}
 					stop(obj.TimerHandle);
-					delete(obj.TimerHandle) ;
 					err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
-					err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
 			end
 		end
-
+		
+		function delete(obj)
+			obj.stop;
+			err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
+			delete(obj.TimerHandle) ;
+		end
+		
 		% Read last part data.
-		function varargout=read(obj,varargin).
+		function varargout=read(obj,varargin)
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
@@ -253,58 +303,82 @@ classdef daqmx_Task < handle
 					% daq read immediately.
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}) ; % don;t forget {:}
-					varargout = obj.DataStorage(DataColumnLgc) ;
-				case {'Finite','Continuous'}
+					varargout{1} = obj.DataStorage(DataColumnLgc) ;
+				case 'Finite'
+					% outout last part from .DataStorage
+					obj.start;
+					while numel(obj.DataTotalNumPerChan) <= 1
+						pause(0.001); % maybe need wait 0.001 here.(matlab timer delay)
+					end
+					
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout{1} = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
+				case 'Continuous'
 					% outout last part from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(end - obj.DataLastPartNum -1 : end  ,DataColumnLgc) ;
 			end
 		end
 		% Write data to .DataStorage (buffer in matlab).
 		function varargout=write(obj,varargin)	% For single mode
-			if nargin > obj.ChanNum+1
-				error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
+			if nargin > 2
+				%error('"write" only allowd 1 output data for each channel, if you need more please use finite mode.');
+				error('"write" only allow 1 data set. Did not support set data for specify channel.')
 			end
 
-			
-			if mod(numel(obj.DataStorage), obj.ChanNum)	% it's should stop. Don't put adaptive code.
-				error('Output data length not same for each channel.');
+			if nargin == 1
+				% .write() , send last data, it's should stored in obj.DataStorage
+								%switch obj.Mode
+								%	case 'Single'
+								%		aobg([],[],obj) ;
+								%	case 'Finite'
+								%	case 'Continuous'
+								%end
+				WriteLastData = 1 ;
+			else
+				% .write(data) , send specify data.
+				WriteLastData = 0 ; 
 			end
-
-			outdata % temp var
 			
 			switch obj.Mode
 				case 'Single'
 					% daq write immediately.
-					
-					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					%varargout = obj.DataStorage(DataColumnLgc) ;
-
-					obj.DataStorage = outdata ;
+								%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+								%varargout = obj.DataStorage(DataColumnLgc) ;
+					if ~WriteLastData
+						obj.DataStorage = varargin{1} ;
+					end
 					aobg([],[],obj) ;
-				case {'Finite'}
+				case 'Finite'
 					% outout last part from .DataStorage
-					%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
+								%DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+								%varargout = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
 					% append .DataStorage
 					if ~WriteLastData
-						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
-						obj.BufHead = 1 ;
+						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;varargin{1}] ;
 					end
-				case {'Continuous'}
-					if obj.CircBuf
-						% overwrite .DataStorage
-						obj.DataStorage = outdata ;
-						obj.BufHead = 1 ;
-					else
-						% append .DataStorage
-						obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;outdata] ;
-						obj.BufHead = 1 ;
+					obj.BufHead = 1 ;
+					aobg([],[],obj) ;
+					obj.start; % don't call .start if running ? because NIstoptask in .start
+				case 'Continuous'
+					% In continuous mode not support no argument.
+					if ~WriteLastData
+						if obj.CircBuf
+							% overwrite .DataStorage
+							obj.DataStorage = varargin{1} ;
+							obj.BufHead = 1 ;
+						else
+							% append .DataStorage
+							obj.DataStorage = [obj.DataStorage(obj.BufHead:end,:) ;varargin{1}] ;
+							obj.BufHead = 1 ;
+						end
 					end
 			end
-
 			
-			
+			% for multichannel function. not support now.
+			%if mod(numel(obj.DataStorage), obj.ChanNum)	% it's should stop. Don't put adaptive code.
+			%	error('Output data length not same for each channel.');
+			%end
 		end
 		
 					% delete this function later
@@ -315,7 +389,7 @@ classdef daqmx_Task < handle
 
 		% Get data from .DataStorage , similar read() but different when mode == f,c
 		% The aim of similar function is readability in other script..
-		function out=Data(obj,varargin)
+		function varargout=data(obj,varargin)
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
@@ -324,16 +398,45 @@ classdef daqmx_Task < handle
 					% daq read immediately.
 					aibg([],[],obj) ;
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(DataColumnLgc) ;
-				case {'Finite','Continuous'}
+					varargout{1} = obj.DataStorage(DataColumnLgc) ;
+				case 'Finite'
+					% outout all data from .DataStorage
+					obj.start;
+					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
+					varargout{1} = obj.DataStorage(: ,DataColumnLgc) ;
+				case 'Continuous'
 					% outout all data from .DataStorage
 					DataColumnLgc = ChanSelect(obj,varargin{:}); % don;t forget {:}
-					varargout = obj.DataStorage(: ,DataColumnLgc) ;
+					varargout{1} = obj.DataStorage(: ,DataColumnLgc) ;
 			end
 		end
 		
 		function ResetDev(obj)
 			err=calllib(obj.LibAlias,'DAQmxResetDevice',obj.DevName) ;
+		end
+
+		function ChangeMode(obj,str)
+			obj.stop;
+			switch lower(str)
+				case {'single','s'}
+					obj.Mode='Single';
+				case {'finite','f'}
+					obj.Mode = 'Finite' ;
+				case {'continuous','c'}
+					obj.Mode = 'Continuous' ;
+				otherwise
+					error('Mode string not allowed.');
+			end
+			SetTiming(obj);
+		end
+		function ChangeRate(obj,RateNum)
+			obj.stop;
+			if isnumeric(RateNum) && numel(RateNum) == 1
+				obj.Rate = RateNum ;
+			else
+				error('Wrong argument.');
+			end
+			SetTiming(obj);
 		end
 	end
 end
@@ -346,6 +449,10 @@ function varargout=aibg(TimerObj,event,ChanObj)
 	if strcmpi(ChanObj.Mode,'Single')
 		ChanObj.DataStorage = NewData ;% add ' ?
 	else
+		% Adapted buffer.
+		if  size(NewData,1) > ChanObj.SampleNum*0.8
+			ChanObj.SampleNum = ceil( ChanObj.SampleNum * 1.2 ) ;
+		end
 		ChanObj.DataTotalNumPerChan = ChanObj.DataTotalNumPerChan + size(NewData,1) ;
 		ChanObj.DataLastTime=(ChanObj.DataTotalNumPerChan-1)/ChanObj.Rate  ; % time of last data
 		ChanObj.DataStorage=[ChanObj.DataStorage ; NewData ]; 
@@ -358,6 +465,12 @@ function varargout=aibg(TimerObj,event,ChanObj)
 		ChanObj.DataLastPartNum=size(NewData,1); % for get last part data (last NewData) by index.
 
 		ChanObj.DataTime=[ ChanObj.DataLastTime- (DataWindow_y-1) /ChanObj.Rate   : 1/ChanObj.Rate   : ChanObj.DataLastTime ]' ;
+		
+		if strcmpi(ChanObj.Mode,'Finite')
+			if ChanObj.DataTotalNumPerChan >= ChanObj.SampleNumTotal
+				ChanObj.stop;
+			end
+		end
 	end
 	%varargout={ChanObj};
 	if ~isempty(ChanObj.CallbackFunc)
@@ -366,7 +479,7 @@ function varargout=aibg(TimerObj,event,ChanObj)
 	
 end
 
-% ======== Buffer size ========
+% ======== NI Buffer size ========
 % Buffered writes require a minimum buffer size of 2 samples. If you do not configure the buffer size using DAQmxCfgOutputBuffer, NI-DAQmx automatically configures the buffer when you configure sample timing.
 % If the acquisition is finite , NI-DAQmx allocates a buffer equal in size to the value of samples per channel. 
 % If the acquisition is continuous, NI-DAQmx will allocate a buffer according to the following table: (S == Scan)
@@ -389,11 +502,14 @@ function aobg(TimerObj,event,ChanObj)
 			%	obj.DataStorage=obj.DataStorage(1:obj.ChanNum); ;
 			%end
 			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage);
-		case {'Finite'}
-			WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage(obj.BufHead:end,:) );
-			obj.BufHead = obj.BufHead + WrittenNum ;
-
-		case {'Continuous'}
+		case 'Finite'
+			if numel(obj.DataStorage(obj.BufHead:end,:)) > 0
+				WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, obj.DataStorage(obj.BufHead:end,:) );
+				obj.BufHead = obj.BufHead + WrittenNum ;
+			%elseif task started && isdone		%TODO: put check task done here.
+				% obj.stop
+			end
+		case 'Continuous'
 			if obj.CircBuf
 				BufLen=length(obj.DataStorage);
 				WrittenNum = DAQmxWriteAnalogF64(ChanObj.LibAlias, ChanObj.NITaskHandle, ChanObj.ChanNum, ChanObj.Timeout ,ChanObj.DataLayout, circshift(obj.DataStorage,-obj.BufHead) );
@@ -409,10 +525,13 @@ function aobg(TimerObj,event,ChanObj)
 	end
 end
 
-% set Task timing
+% set Task timing and make matlab timer.
 function SetTiming(obj)
 	if ~isempty(obj.TimerHandle)
 		delete(obj.TimerHandle) ;
+	end
+	if strcmpi(obj.Mode,'Single')
+		return ;
 	end
 	switch obj.ChanType
 		case 'ai'
@@ -422,11 +541,11 @@ function SetTiming(obj)
 	end
 	switch obj.Mode
 		case 'Finite'
-			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'TasksToExecute',ceil(obj.SampleNum/obj.Rate/obj.ProcPeriod));
-			DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNum); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples , Total data number set in SampleNum
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'TasksToExecute',ceil(obj.SampleNumTotal/obj.Rate/obj.ProcPeriod )+1,'StopFcn',@(~,~)obj.stop);
+			DAQmxCfgSampClkTiming(obj.LibAlias, obj.TimerHandle, 10178, obj.Rate ,obj.SampleNumTotal); % DAQmx_Val_FiniteSamps = 10178 % Finite Samples , Total data number set in SampleNumTotal
 		case 'Continuous'
 			
-			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod) ;
+			obj.TimerHandle = timer('TimerFcn',{TimerFcn_Handle,obj},'ExecutionMode','fixedRate','Period',obj.ProcPeriod,'StopFcn',@(~,~)obj.stop) ;
 			
 			DAQmxCfgSampClkTiming(obj.LibAlias, obj.NITaskHandle, 10123, obj.Rate ,obj.SampleNum); % DAQmx_Val_ContSamps = 10123 % Continuous Samples
 	end
