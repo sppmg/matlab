@@ -6,8 +6,7 @@ function ECGProc(daq)
 	% Section action by direct run this function file. Only define daq object and run it.
         % delete(timerfind); close all; clear classes;
 		daq = daqmx_Task('chan','dev1/ai1','rate',5000,'callbackfunc','ECGProc','ProcPeriod',1);
-		daq.DataWindowLen = 120*daq.Rate ;			% store 120 sec. data in object.
-		% daq.SampleNum=round(3*daq.Rate*daq.ProcPeriod);	% 3 times ProcPeriod buffer. Should be default setting in last daqmx_Task.
+		daq.DataStorageLen = 120*daq.Rate ;			% store 120 sec. data in object.
 		daq.resetDev;
 		daq.start;
 		ana.taskTime = tic ;
@@ -79,8 +78,8 @@ function ECGProc(daq)
 end
 
 function delme(~,~,daq)
-	daq.stop;
-	delete(timerfind);
-	%daq.delete; % can't work now.
-	clear classes;
+	%daq.stop;
+	%delete(timerfind);
+	daq.delete; % can't work now.
+	%clear classes;
 end

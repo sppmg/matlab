@@ -24,7 +24,7 @@ for fi=1:length(file)
 			disp('ascii -> mat')
 			%data=load(fullfile(path,file{fi}));
 			
-			fid=fopen(fullfile(path,file{fi}),'r')
+			fid=fopen(fullfile(path,file{fi}),'r');
 			tmp_s=fread(fid,inf,'uint8=>char');
 			fclose(fid);
 			data_col_num=numel(sscanf(strtok(tmp_s,char(10)),'%f'));
