@@ -44,7 +44,7 @@ classdef daqmx_Task < handle
 		LibAlias = 'nidaqmx' ;
 
 		% LastVal_ for compare variable change.
-		LastVal_SampleNum  ;
+		LastVal_SampleNum = 1 ;
 		
 		%StatusTaskRunning = 0 ;
 		IsSingleChan = 0; % for fast switch single point read/write function.
@@ -191,7 +191,7 @@ classdef daqmx_Task < handle
 				error('Alias number more than channel number.');
 			end
 			obj.ChanNum=numel(obj.ChanOccupancy); % It's for fast get number.
-			if obj.ChanNum == 1 && exist('DAQmxReadAnalogScalarF64') && exist('DAQmxWriteAnalogScalarF64')
+			if obj.ChanNum == 1 && exist('DAQmxReadAnalogScalarF64','builtin') && exist('DAQmxWriteAnalogScalarF64','builtin')
 				obj.IsSingleChan = true ;
 			else
 				obj.IsSingleChan = false ;
@@ -261,7 +261,7 @@ classdef daqmx_Task < handle
 						case 'Single'
 							obj.read( varargin{:} ) ;
 						case 'Finite'
-							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
+							calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 							if obj.SampleNum ~= obj.LastVal_SampleNum
 								obj.DataStorageLen = obj.SampleNum ;
 								obj.Timeout = obj.SampleNum * 1.2 / obj.Rate + 5 ;
@@ -269,13 +269,13 @@ classdef daqmx_Task < handle
 								obj.LastVal_SampleNum = obj.SampleNum ;
 							end
 							%obj.DataStorage = [] ; % aibg will overwrite
-							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 						case 'Continuous'
 							obj.DataStorageLen = round ( obj.DataStorageLen ) ;
-							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
+							calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 							SetTiming(obj);
 							obj.DataStorage = [] ;
-							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
 				case 'ao'
@@ -290,11 +290,11 @@ classdef daqmx_Task < handle
 								SetTiming(obj);
 								%obj.LastVal_SampleNum = obj.SampleNum ; % only use in ai
 							end
-							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 						case 'Continuous'
-							err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
+							calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 							SetTiming(obj);
-							err = calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
 					end
 			end
@@ -308,14 +308,14 @@ classdef daqmx_Task < handle
 						stop(obj.TimerHandle);
 					end
 					if strcmpi(obj.Mode, 'Continuous') || strcmpi(obj.Mode, 'Finite')
-						err = calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
+						calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 					end
 			end
 		end
 		
 		function delete(obj)
 			obj.stop;
-			err = calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
+			calllib(obj.LibAlias,'DAQmxClearTask',obj.NITaskHandle);
 			if ~isempty(obj.TimerHandle)
 				delete(obj.TimerHandle) ;
 			end

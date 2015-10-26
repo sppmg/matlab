@@ -5,7 +5,7 @@ function ECGProc(daq)
 	if nargin == 0
 	% Section action by direct run this function file. Only define daq object and run it.
         % delete(timerfind); close all; clear classes;
-		daq = daqmx_Task('chan','dev1/ai1','rate',5000,'callbackfunc','ECGProc','ProcPeriod',1);
+		daq = daqmx_Task('chan','dev1/ai1','rate',5000,'callbackfunc',mfilename,'ProcPeriod',1);
 		daq.DataStorageLen = 120*daq.Rate ;			% store 120 sec. data in object.
 		daq.resetDev;
 		daq.start;
