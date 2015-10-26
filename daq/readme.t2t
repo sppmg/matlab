@@ -1,0 +1,218 @@
+Daqmx 物件使用手冊
+sppmg , http://github.com/sppmg
+%%date
+%!encoding: UTF-8 %!target: html
+
+% .t2t 文件使用txt2tags格式，請google txt2tags
+% 編譯指令 $ txt2tags -t html --toc <file>
+%%toc
++ 簡介 +
+++ 功能 ++
+利用Matlab直接呼叫NI 提供之DLL程式庫來操作Daq裝置。
+此daqmx物件使用matlab物件型態，將呼叫NI程式庫所須之資料、函式及處理步驟封裝於單一物件之中(註1)，以簡化主程式寫作。
+
+- 註1：物件仍須另外的matlab程式轉換matlab變數至DLL函式庫可接受格式。
+- 註2：你不須要matlab的daq toolbox.
+
+
+++ 簡易範例 ++
+下面展示兩個讀取訊號的例子。可見得使用本物件操作NI DAQ是如何的輕鬆愜意。相較之下Matlab daq toolbox還稍嫌麻煩。 :D
+
++ 讀目前電壓
+```
+daq = daqmx_Task('dev1/ai0');	% 建立控制物件。
+daq.read
+```
+
++ 繪出當前訊號
+```
+daq = daqmx_Task('chan','dev1/ai0','rate',1000);	% 建立控制物件。並設定取樣率、處理週期。
+plot(daq.DataTime , daq.data);	% 畫出位於物件內的數據紀錄。利用迴圈或是Callback functin可以取得訊號的連續變化。（若是有即時顯示須求，這裡推薦我為此而寫的monitor.m 物件。同樣讓你事半功倍。）
+```
++ 與Matlab daq toolbox 比較
+```
+s = daq.createSession('ni') ;
+s.DurationInSeconds = 10.0 ;
+addAnalogInputChannel(s,'Dev2','ai0','Voltage') ;
+s.Rate=4000 ;
+% data = startForeground(s); <-- Block mode
+lh = addlistener(s,'DataAvailable', @proc) ;  % <-- Background mode
+s.startBackground
+% Below write in "proc" function
+plot(event.TimeStamps, event.Data,'+:')
+```
+
+
++ 快速上手 +
+這裡展示如何使用daqmx_Task，讓你可以複製、貼上你的程式。
+
++ 讀當前電壓
+
+```
+daq = daqmx_Task('Dev1/ai0');
+data = daq.read;
+printf('data = %g \n',data);
+daq.delete;
+clear daq;
+```
+
++ 輸出一個電壓值
+
+注意！電壓會保持在你所輸出的值，不會自動回到0V。
+```
+daq = daqmx_Task('Dev1/ao1');
+daq.write(n*0.1);
+daq.delete;
+clear daq;
+```
+
++ 讀 "一段" 電壓
+
+這裡示範以 1KHz 讀1秒鐘，讀完後plot出來
+```
+daq = daqmx_Task('chan','Dev1/ai0' ,'rate',1000, 'SampleNum', 1000);
+daq.start;
+figure ; plot(daq.data);
+daq.delete;
+clear daq;
+```
+
++ 輸出 "一段" 電壓
+
+這裡示範以 1KHz 輸出1秒鐘長的特定訊號。訊號以sin,cos混成。
+宣告daqmx_Task 物件有下面兩種方式，第一行（註解處）用於已知訊號長度。
+第二行用於未知訊號長度。兩者差異僅在省去指定模式以及首次輸出延遲而已，應該也只有不到1ms差別。
+```
+% daq = daqmx_Task('chan','Dev1/ao1' ,'rate',1000, 'SampleNum', 1000);
+daq = daqmx_Task('chan','Dev1/ao1' ,'rate',1000, 'Mode', 'f');
+data =0.1*(sin(7*linspace(0,2*pi,1000))+cos(3*linspace(0,2*pi,1000)));
+daq.write(data);
+
+% Write same data again.
+	pause(5);
+daq.write;
+
+% change data length
+	pause(5);
+data =0.1*(sin(7*linspace(0,2*pi,100))+cos(3*linspace(0,2*pi,100)));
+daq.write(data);
+
+```
+可以看到即使輸出長度改變也沒問題。要重複輸出相同訊號只要不加參數即可。
+
++ 連續性讀入電壓
+
+下面示範使用Callback方式畫出訊號並以0.5秒週期更新。
+
+```
+daq = daqmx_Task('chan','Dev1/ai0','rate',1000,'callbackfunc','proc','ProcPeriod',0.5);
+daq.start;
+
+function proc(daq)
+	plot(daq.DataTime , daq.data);
+end
+```
+若不須即時操作，可以不用Callback，直接使用plot(daq.DataTime , daq.data);
+
+
++ NI Daqmx Task 介紹 +
+
+daqmx 讀寫模式有三種：
++ Single
+
+讀取一點訊號，訊號不經緩衝區直接進到你的程式中。
+	
++ Finite
+
+讀一段訊號，因此需要設定取樣率、資料長度。訊號會先進緩衝區（位於電腦記憶體中），待讀取完畢後才傳入你的程式。非阻塞式讀取，亦即你的程式會繼續執行。如要停在讀取處直到訊號讀寫完須執行DAQmxWaitUntilTaskDone函式。
+	
++ Continuous
+
+連續讀寫訊號。與Finite差別在是非阻塞型讀取。一樣要設定取樣率、資料長度。但資料長度指的是每次讀取時，由緩衝區讀入的長度。初始設定值會影響到NI api設定緩衝區大小。
+
+
+注意NI DAQ有許多系列（包含我用的M系列）不允許在同類通道使用不同取樣率，如ai0 使用1KHz ，ai1使用2KHz。
+
+
++ daqmx_Task 物件介紹 +
+
+
+++ 物件屬性（存於物件內的變數） ++
+
+|| 名稱 | 說明 |
+| ChanAlias |  |
+| Max = 10 | daq讀值範圍，影響到精度 |
+| Min = -10 | daq讀值範圍，影響到精度 |
+| DataLayout = 1 | 多通道讀入資料時的排列方式 DAQmx_Val_GroupByScanNumber = 1 |
+| SampleNum = 1 | 設定讀寫資料長度，會影響到NI api設定緩衝區大小 |
+| Timeout = 5 | 逾時 |
+| ProcPeriod | 多久（秒）與NI緩衝區交換一次資料，同時也是使用者設定函數的呼叫週期。 |
+| DataWindowLen | daqmx_Task中資料區的長度（資料點數） |
+| CallbackFunc | Callback 函數名稱 |
+| CircBuf = 0 | Circulary buffer of write (ao) |
+| BufHead = 1 | Head pointer for write buffer, next write data. |
+| UserData | 供使用者自由使用的空間 |
+
+下表是僅供讀取的屬性。如要修改必須透過物件方法來改。
+
+|| 名稱 | 說明 |
+| PhyChan | eg : 'Dev1/ai0' |
+| NITaskHandle |  |
+| TimerHandle |  |
+| DevName |  % eg : dev1 |
+| ChanType | % eg : ai / ao / di / do / etc .... |
+| ChanMeas = 'Voltage' | % Measure eg. V,I |
+| ChanNum | 使用通道數 |
+| ChanOccupancy | |
+| Mode | 讀寫模式，限定: 'Single' , 'Finite' , 'Continuous' |
+| Rate | 取樣率 |
+| DataTime | % storage time of each data |
+| DataLastTime = 0 |  |
+| DataLastPartNum = 0 |  |
+| DataTotalNumPerChan = 0 | % per channel |
+| DataStorage | % storage input data. |
+| LibHeader = 'NIDAQmx-lite.h' |  |
+| LibDll = 'C:\WINDOWS\system32\nicaiu.dll' | |
+| LibAlias = 'nidaqmx' | |
+| LastVal_SampleNum  | |
+
+
+
+++ 讀寫模式 ++
+此daqmx物件支援電壓（輸出、輸入）、電流（輸入）操作。並且支援NI提供的三種操作模式。"single", "finite", "continuous".。若沒特別指定，程式會依照參數自行選擇最有可能之模式。
+
+|| 模式名稱  | 允許縮寫 | 說明 | 自動選擇範例 |
+| Single     | s       | 讀寫一筆數據。 | daq = daqmx_Task('dev1/ai1') |
+| Finite     | f       | 讀寫指定長度的數據。須指定取樣率及數據量。 | daq = daqmx_Task('chan','dev1/ai1','rate',1000,'SampleNum',100) |
+| Continuous | c       | 連續讀寫數據。須指定取樣率。 | daq = daqmx_Task('chan','dev1/ai1','rate',100) |
+
+進行讀取操作後，資料會存在object,DataStorage中。建議透過data,read方法讀取資料。
+寫入操作須要透過write寫入輸出緩衝區。
+
+++ 物件方法（物件內函數） ++
++++ 概觀 +++
+所有的方法名稱均以小寫開頭
+|| 方法名稱   | 說明 |
+| resetDev   | 重設 daq 裝置 |
+| start      | 開始執行預設工作 |
+| stop       | 停止執行預設工作 |
+| delete     | 釋放此物件相關之佔用資源 |
+| data       | 取得一定時間內的所有資料（長度定義在DataWindowLen） |
+| read       | 取得最新一段資料。 |
+| write      | 將數據寫出（mode f,c為寫入NI緩衝區） |
+| changeMode | 於建立物件後改變模式設定。 （未完成） |
+| changeRate | 於建立物件後改變取樣率設定。（未完成） |
+
+私有函數（僅供物件自身使用）
+aibg
+aobg
+SetTiming
+ChanSelect
+
+
+
+
++ 選項及參數 +
+至少須指定使用的channel
+
+

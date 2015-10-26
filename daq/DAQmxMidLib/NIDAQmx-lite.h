@@ -197,6 +197,7 @@ int32 __CFUNC     DAQmxCfgOutputBuffer           (TaskHandle taskHandle, uInt32 
 int32 __CFUNC_C   DAQmxGetBufferAttribute        (TaskHandle taskHandle, int32 attribute, void *value);
 int32 __CFUNC_C   DAQmxSetBufferAttribute        (TaskHandle taskHandle, int32 attribute, ...);
 int32 __CFUNC     DAQmxResetBufferAttribute      (TaskHandle taskHandle, int32 attribute);
+int32 __CFUNC     DAQmxGetBufOutputBufSize       (TaskHandle taskHandle, uInt32 *data);
 
 /******************************************************/
 /***                Device Control                  ***/

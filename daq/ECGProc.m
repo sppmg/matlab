@@ -5,10 +5,9 @@ function ECGProc(daq)
 	if nargin == 0
 	% Section action by direct run this function file. Only define daq object and run it.
         % delete(timerfind); close all; clear classes;
-		daq = daqmx_Task('chan','dev1/ai1','rate',5000,'callbackfunc','ECGProc','ProcPeriod',1);
-		daq.DataWindowLen = 120*daq.Rate ;			% store 120 sec. data in object.
-		% daq.SampleNum=round(3*daq.Rate*daq.ProcPeriod);	% 3 times ProcPeriod buffer. Should be default setting in last daqmx_Task.
-		daq.ResetDev;
+		daq = daqmx_Task('chan','dev1/ai1','rate',5000,'callbackfunc',mfilename,'ProcPeriod',1);
+		daq.DataStorageLen = 120*daq.Rate ;			% store 120 sec. data in object.
+		daq.resetDev;
 		daq.start;
 		ana.taskTime = tic ;
 		%pause(10); daq.stop;
@@ -26,13 +25,13 @@ function ECGProc(daq)
 				ana.lt_a_updateTime = ana.lt_a_updatePeriod ;
 				ana.lt_a_dataLenSec = 60 ; %sec
 
-				ui.plotPlace = figure('Renderer','OpenGL','MenuBar', 'none','ToolBar', 'none''Units','normalized','Position',[0.6,0.035,0.4,0.91]) ;
+				ui.plotPlace = figure('Renderer','OpenGL','MenuBar', 'none','ToolBar', 'none', 'Units','normalized','Position',[0.6,0.035,0.4,0.91]) ;
 				ui.peakHigh_edt = uicontrol('style','edit','string',ana.rt_peakHigh,'Parent',ui.plotPlace,'DeleteFcn',{@delme,daq});
 				mon = monitor(ui.plotPlace,daq.DataTime,daq.data);
 			else
 				% Action when every loop , call by timer .
-				ana.rt_peakHigh = str2num(get(ui.peakHigh_edt,'string')) ;
-				[pks,locs] = findpeaks( sign(ana.rt_peakHigh)*daq.data, 'MINPEAKHEIGHT', abs(ana.rt_peakHigh), 'MINPEAKDISTANCE', ana.rt_peakMinInterval * daq.Rate);
+				ana.rt_peakHigh = str2double(get(ui.peakHigh_edt,'string')) ;
+				[~,locs] = findpeaks( sign(ana.rt_peakHigh)*daq.data, 'MINPEAKHEIGHT', abs(ana.rt_peakHigh), 'MINPEAKDISTANCE', ana.rt_peakMinInterval * daq.Rate);
 				if numel(locs) > 2 % need rewrite this line in 2+ channel.
 					ibi=[daq.DataTime(locs(2:end)), diff(daq.DataTime(locs),1)];
 					if length(ibi) > (2* ana.rt_msdDataLen+1)  % check for movingstd () , use length here , not numel.
@@ -71,16 +70,16 @@ function ECGProc(daq)
 					ana.dataSS = ibi(:,1) > ( daq.DataTime(end) - ana.lt_a_dataLenSec );
 					fprintf('Time = %d \t IBI = %f \t HRV = %e \n',toc(ana.taskTime) ,mean(ibi(ana.dataSS ,2)),std(ibi(ana.dataSS ,2))  );
 					% time func--> datestr(now)
-					ana.lt_a_updateTime = ana.lt_a_updateTime + ana.lt_a_updatePeriod
+					ana.lt_a_updateTime = ana.lt_a_updateTime + ana.lt_a_updatePeriod ;
 				end
 			end
 		end
 	end
 end
 
-function delme(a,b,daq)
-	daq.stop;
-	delete(timerfind);
-	%daq.delete; % can't work now.
-	clear classes;
+function delme(~,~,daq)
+	%daq.stop;
+	%delete(timerfind);
+	daq.delete; % can't work now.
+	%clear classes;
 end
