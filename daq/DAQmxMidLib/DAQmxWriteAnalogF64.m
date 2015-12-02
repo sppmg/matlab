@@ -19,8 +19,8 @@ function numwritten = DAQmxWriteAnalogF64(lib,taskh,numChan,timeout,dataLayout,w
 % %	int32 DAQmxStopTask (TaskHandle taskHandle);
 %[long, doublePtr, longPtr, ulongPtr] DAQmxWriteAnalogF64(ulong, long, ulong, double, ulong, doublePtr, longPtr, ulongPtr)
 %writeArray
-writeArray(writeArray > 10) =10;
-writeArray(writeArray < -10) =-10;
+%writeArray(writeArray > 10) =10;
+%writeArray(writeArray < -10) =-10;
 if ndims(writeArray) > 1 	% column for channel
 	writeArray=reshape(writeArray',1,[]);
 end

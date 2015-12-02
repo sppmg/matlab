@@ -5,7 +5,7 @@ function data = DAQmxReadAnalogF64(lib,taskh,numSampsPerChan,timeout,fillMode,nu
 % inputs:
 %	lib - .dll or alias (ex. 'myni')
 %	taskh - taskhandle of analog inputs
-%	numSampsPerChan = DAQmx_Val_Auto ?
+%	numSampsPerChan = DAQmx_Val_Auto (-1 -> read all available)
 %	timeout - in seconds
 %	fillMode - DAQmx_Val_GroupByChannel or DAQmx_Val_GroupByScanNumber
 %	numchan - number of analog channels to read
