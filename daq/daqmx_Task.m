@@ -29,7 +29,7 @@ classdef daqmx_Task < handle
 		ChanNum ;
 		ChanOccupancy ;
 		
-		Mode ; % Mode = 'Single' | 'Finite' | 'Continuous'
+		Mode ; % Mode = 'Single' | 'Finite' | 'Continuous | RealTime '
 		Rate ;
 		
 		DataTime ; % storage time of each data
@@ -48,6 +48,12 @@ classdef daqmx_Task < handle
 		
 		%StatusTaskRunning = 0 ;
 		IsSingleChan = 0; % for fast switch single point read/write function.
+		
+		% LibPtr_ for calllib 
+		LibPtr_null = libpointer('uint32Ptr',[]);
+		LibPtr_sampread = libpointer('int32Ptr',0);
+		LibPtr_value = libpointer('doublePtr', 0);
+		LibPtr_array = libpointer('doublePtr',zeros(1,1));
 	end
 	methods
 		function obj=daqmx_Task(varargin)
@@ -56,7 +62,6 @@ classdef daqmx_Task < handle
 				disp(['Matlab: Loading library from ',obj.LibDll ])
 				[notfound,warnings] = loadlibrary(obj.LibDll , obj.LibHeader ,'alias',obj.LibAlias );
 			end
-			disp('Matlab: dll loaded')
 			switch nargin
 				case 0
 					helpMsg;
@@ -100,6 +105,8 @@ classdef daqmx_Task < handle
 											obj.Mode = 'Finite' ;
 										case {'continuous','c'}
 											obj.Mode = 'Continuous' ;
+										case {'realtime', 'r'}
+											obj.Mode = 'RealTime' ;
 										otherwise
 											error('Mode string not allowed.');
 									end
@@ -288,6 +295,8 @@ classdef daqmx_Task < handle
 							if ~isempty(obj.TimerHandle)
 								start(obj.TimerHandle) ;
 							end
+						case 'RealTime'
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 					end
 				case 'ao'
 					switch obj.Mode
@@ -314,18 +323,20 @@ classdef daqmx_Task < handle
 							end
 							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 							start(obj.TimerHandle) ;
+						case 'RealTime'
+							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 					end
 			end
 		end
 
-		% Stop task , for mode == f,c
+		% Stop task , for mode == f,c,r
 		function stop(obj)
 			switch obj.ChanType
 				case {'ai','ao'}
 					if ~isempty(obj.TimerHandle)
 						stop(obj.TimerHandle);
 					end
-					if strcmpi(obj.Mode, 'Continuous') || strcmpi(obj.Mode, 'Finite')
+					if strcmpi(obj.Mode, 'Continuous') || strcmpi(obj.Mode, 'Finite') || strcmpi(obj.Mode, 'RealTime')
 						calllib(obj.LibAlias,'DAQmxStopTask',obj.NITaskHandle);
 					end
 			end
@@ -341,6 +352,13 @@ classdef daqmx_Task < handle
 		
 		% Read last part data.
 		function varargout=read(obj,varargin)
+			switch obj.Mode
+				case 'RealTime'
+					calllib(obj.LibAlias, 'DAQmxReadAnalogScalarF64', obj.NITaskHandle, obj.Timeout, obj.LibPtr_value, obj.LibPtr_null );
+					varargout{1} = obj.LibPtr_value.Value ;
+					return ;
+			end
+			
 			if ~iscellstr(varargin)
 				error('Only allow string.') ;
 			end
@@ -376,6 +394,12 @@ classdef daqmx_Task < handle
 		end
 		% Write data to .DataStorage (buffer in matlab).
 		function varargout=write(obj,varargin)
+			switch obj.Mode
+				case 'RealTime'
+					calllib(obj.LibAlias, 'DAQmxWriteAnalogScalarF64', obj.NITaskHandle, 1, obj.Timeout, varargin{1}, obj.LibPtr_null );
+					return ;
+			end
+			
 			switch nargin		% argin include obj, so nargin >= 1
 				case 1
 					WriteLastData = 1 ;
