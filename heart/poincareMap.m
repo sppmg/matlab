@@ -37,7 +37,8 @@ zlabel('peak(n+2)');
 hold off;
 
 set (gcf,'PaperUnits','point','PaperPosition',[0 0 400 400])  %should use pixels
-
+box on;
+axis square ;
 %print(gcf,'-dpng',fullfile(path,[f_name,'.png']))
 
 if nargout

@@ -322,7 +322,9 @@ classdef daqmx_Task < handle
 								% DAQmx_Val_DoNotAllowRegen = 10158
 							end
 							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
-							start(obj.TimerHandle) ;
+							if ~isempty(obj.TimerHandle)
+								start(obj.TimerHandle) ;
+							end
 						case 'RealTime'
 							calllib(obj.LibAlias, 'DAQmxStartTask',obj.NITaskHandle);
 					end
@@ -389,6 +391,8 @@ classdef daqmx_Task < handle
 					if ~isempty(obj.DataStorage)
 						DataColumnLgc = selectChan(obj,varargin{:}); % don;t forget {:}
 						varargout{1} = obj.DataStorage(end - obj.DataLastPartNum +1 : end  ,DataColumnLgc) ;
+					else
+						varargout{1} = [];
 					end
 			end
 		end
