@@ -45,6 +45,5 @@ And,it will dynamic change when you use .plot .
 
 === Todo ===
 I will add below function later .
-change title,x/ylabel
 can fix y range
 finish y2 part.

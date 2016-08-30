@@ -197,6 +197,7 @@ int32 __CFUNC     DAQmxCfgOutputBuffer           (TaskHandle taskHandle, uInt32 
 int32 __CFUNC_C   DAQmxGetBufferAttribute        (TaskHandle taskHandle, int32 attribute, void *value);
 int32 __CFUNC_C   DAQmxSetBufferAttribute        (TaskHandle taskHandle, int32 attribute, ...);
 int32 __CFUNC     DAQmxResetBufferAttribute      (TaskHandle taskHandle, int32 attribute);
+
 int32 __CFUNC     DAQmxGetBufOutputBufSize       (TaskHandle taskHandle, uInt32 *data);
 
 /******************************************************/
@@ -225,6 +226,32 @@ int32 __CFUNC     DAQmxGetErrorString            (int32 errorCode, char errorStr
 int32 __CFUNC     DAQmxGetExtendedErrorInfo      (char errorString[], uInt32 bufferSize);
 
 
+/******************************************************************************
+ *** NI-DAQmx Specific Attribute Get/Set/Reset Function Declarations **********
+ ******************************************************************************/
+
+//********** Buffer **********
+
+//********** Read **********
+
+//*** Set/Get functions for DAQmx_Read_OverWrite ***
+// Uses value set OverwriteMode1
+int32 __CFUNC DAQmxGetReadOverWrite(TaskHandle taskHandle, int32 *data);
+int32 __CFUNC DAQmxSetReadOverWrite(TaskHandle taskHandle, int32 data);
+int32 __CFUNC DAQmxResetReadOverWrite(TaskHandle taskHandle);
+
+//********** Write **********
+
+//*** Set/Get functions for DAQmx_Write_RegenMode ***
+// Uses value set RegenerationMode1
+int32 __CFUNC DAQmxGetWriteRegenMode(TaskHandle taskHandle, int32 *data);
+int32 __CFUNC DAQmxSetWriteRegenMode(TaskHandle taskHandle, int32 data);
+int32 __CFUNC DAQmxResetWriteRegenMode(TaskHandle taskHandle);
+
+// ************* other **************
+int32 __CFUNC DAQmxGetSampTimingType(TaskHandle taskHandle, int32 *data);
+int32 __CFUNC DAQmxSetSampTimingType(TaskHandle taskHandle, int32 data);
+int32 __CFUNC DAQmxResetSampTimingType(TaskHandle taskHandle);
 
 
 #ifdef __cplusplus
