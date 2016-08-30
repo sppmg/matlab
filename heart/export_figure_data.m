@@ -20,7 +20,7 @@ for data_set=1:data_set_num
 	% hg(matlab7fmt).axes_number.layout
 	if isfield(hgS_070000.children(data_set).properties, 'XLim')
 		x_lim = hgS_070000.children(data_set).properties.XLim ; % axes xlim
-		range_idx = d>x_lim(1) & d < x_lim(2) ;
+		range_idx = d >= x_lim(1) & d <= x_lim(2) ;
 	else
 		range_idx = logical(d);
 	end

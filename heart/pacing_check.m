@@ -30,7 +30,7 @@ end
 
 rate=round(1/(t(2)-t(1)));
 
-[~,locs]=findpeaks(v,'MINPEAKDISTANCE',round(rate*du),'MINPEAKHEIGHT',0.1); % 0.1
+[~,locs]=findpeaks(v,'MINPEAKDISTANCE',round(rate*du),'MINPEAKHEIGHT',0.2); % 0.1
 fig1=figure; plot(t,v,'b-',t(locs),v(locs),'r+')
 isi=[t(locs(2:end)),diff(t(locs))*1e3];
 %round(rate/1e2)
@@ -38,7 +38,7 @@ isi=[t(locs(2:end)),diff(t(locs))*1e3];
 sp=smooth(p,10);
 
 %[~,locs]=findpeaks(sp,'MINPEAKDISTANCE',round(rate*du),'MINPEAKHEIGHT',mean(sp));
-[~,locs]=findpeaks(sp,'MINPEAKDISTANCE',round(rate*du),'MINPEAKHEIGHT',20);
+[~,locs]=findpeaks(sp,'MINPEAKDISTANCE',round(rate*du),'MINPEAKHEIGHT',10);
 tmp_k=1;
 
 for n=2:numel(locs)-1
