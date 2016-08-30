@@ -220,6 +220,16 @@ RealTime 為高效能的 Single mode，須搭配 .start / .stop 。物件內也�
 | changeMode | 於建立物件後改變模式設定。 （未完成） |
 | changeRate | 於建立物件後改變取樣率設定。（未完成） |
 
+
+對於 .read / .write / .data 在各讀寫模式下的作用如下表
+||           | read | write | data |
+| Single     | 
+| Finite     | 
+| Continuous | 
+| RealTime   | 
+
+
+
 +++ 私有函數（僅供物件自身使用） +++
 || 方法名稱   | 說明 |
 | aibg | 背景執行類比訊號輸入 (background analogy input) |
@@ -271,7 +281,7 @@ RealTime 為高效能的 Single mode，須搭配 .start / .stop 。物件內也�
 | LibPtr_null | LibPtr_ 開頭的屬性用來儲存指標型態變數，直接使用calllib指令時會用到。 |
 
 
-這裡提一下，NIDAQmx-lite.h 是由 NIDAQmx.h 複製出所須部份的檔案。另建新檔是因為 NIDAQmx.h 內函數過多，載入時間太長（eeebox甚至要2min）。
+
 
 
 
@@ -324,6 +334,7 @@ NI daqmx 本身讀寫模式有三種，Single mode 配合start task 成為本物
 
 + 預定放入內容 +
 
+NIDAQmx-lite.h 是由 NIDAQmx.h 複製出所須部份的檔案。另建新檔是因為 NIDAQmx.h 內函數過多，載入時間太長（eeebox甚至要2min）。
 
 + 附錄 +
 

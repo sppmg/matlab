@@ -5,8 +5,11 @@ if obj.DataTotalNum <= 0
 	clearvars PlotObj ;
 	return ;
 end
-dx={obj.DataTime,obj.DataTime} ;	
-dy={obj.DataWindow(:,1),obj.DataWindow(:,2)} ;
+%dx={obj.DataTime,obj.DataTime} ;
+%dy={obj.DataWindow(:,1),obj.DataWindow(:,2)} ;
+
+dx={obj.DataTime} ;
+dy={obj.Data} ;
 
 plot_num=numel(dx);
 if exist('PlotObj','var') && ~isempty(PlotObj)

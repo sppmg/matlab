@@ -1,5 +1,6 @@
 2014-12-03
 * ibi_analyze.m :
+program_version=2014060202
 Move data save command togeter and comment ibi,dibi,dibi/ibi .(all in tidp file).
 Move thread section after open file window.
 Change axes of dIBI to logscale.

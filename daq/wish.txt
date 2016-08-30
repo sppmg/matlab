@@ -70,4 +70,8 @@ ai
 ao
 	s -> from data or var  , no timer ,no callback
 	f -> 
-	c -> from data , 
+	c -> from data ,
+----------------
+
+檢查自動選擇模式。f,c可能相衝eg, samplenum 先於rate
+加入臨時變數：手動指定rate , etc. 最後檢查

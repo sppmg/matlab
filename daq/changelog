@@ -8,7 +8,120 @@ todo check aibg NewData shape in multichannel,single mode. does need transpose ?
 2014-12-12
 * daqmx_Task.m
  User should use method change timing, mode after object creation.
-note read() auto start() in fmode? write() will stop task in fmode now. <--where (141214)?
+note write() will stop task in fmode now. <--where (141214)?
 
-2014-12-14
+2014-12-15
 * daqmx_Task.m
+add read()/data() auto start() when mode == f
+fix reset obj.Data* = 0 at start()
+
+2014-12-17
+* daqmx_Task.m
+change Force ChanType,DevName to string from cell.
+todo .Data input check maybe has some problem.
+	read() don't have same length time , fix it or let only data output ?
+	read() 傳回的長度不一，導致.DataTime 與其不匹配。（目前傾向於不管，使用者須自行處理）
+	.delete clear self ?
+	
+
+2014-12-20
+* daqmx_Task.m
+Change method .Data to .data
+
+2014-12-22
+* daqmx_Task.m
+rewrite Automatically determine mode
+add Adapted buffer
+add timer 'StopFcn',@obj.stop
+todo timer in mode f .
+	
+
+2014-12-23
+* daqmx_Task.m
+add force set .SampleNum .DataWindowLen to interger by round() at start().
+todo check SampleNum in write auto set6
+	maybe f mode ai will read more data then SampleNumTotal, should cut it ?
+	aobg() f mode nitask is done
+
+2014-12-26
+* daqmx_Task.m
+fix timer StopFcn from @obj.stop to @(~,~)obj.stop
+
+
+
+2014-12-30
+new daq mid lib test result
+ai single時不論SampleNum為何，均只讀一筆(此為我自己的sample read結果)。data會放在column(不用再轉置)
+用ptr.value語法比較好，因為不會搞錯位置
+
+
+
+check work list
+	read
+	creat ai chan
+	DAQmxCfgImplicitTiming
+	DAQmxCreateCOPulseChanFreq
+DAQmxWriteCtrFreq 參數必須重寫
+
+
+>> mon=monitor(daq.DataTime,daq.Data('a'))
+Subscripted assignment dimension mismatch.
+
+Error in monitor/new (line 56)
+					obj.LineHandle(line_i)=line(obj.x{1},obj.y{line_i}, ...
+
+Error in monitor (line 27)
+				obj.new ;
+
+>> daq.stop
+>> plot(daq.DataTime , daq.Data('a') )
+>> plot(daq.DataTime , daq.Data('a') )
+>> daq.DataTime
+
+ans =
+
+   Empty matrix: 0-by-1
+
+>>
+
+
+
+>> mon.plot(daq.DataTime,daq.Data('a'));
+>> mon.plot(daq.DataTime,{daq.Data('a'),daq.Data('b'),daq.Data('c') } );
+Error using set
+Invalid object handle
+
+Error in subplot (line 526)
+                set(ax, pvpairs{:});
+
+Error in monitor/new (line 48)
+				obj.AxesHandle(axes_i)=subplot(MaxPlotAxes,1,axes_i,'Parent',obj.ParentHandle,
+                ...
+
+Error in monitor/plot (line 77)
+					obj.new ;
+
+>>
+
+>> [notfound,warnings] = loadlibrary(LibDll , LibHeader ,'alias',lib );
+Warning: Could not get change notification handle for remote F:\daq-test\DAQmxMidLib2.
+This file server does not appear to support change notification.
+Type 'help changeNotification' for more info.
+> In tempdir at 32
+  In loadlibrary at 308
+Warning: The data type 'error' used by function DAQmxGetChanAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxSetChanAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxGetReadAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxSetReadAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxGetWriteAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxSetWriteAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxSetBufferAttribute does not exist.
+> In loadlibrary at 402
+Warning: The data type 'error' used by function DAQmxGetDeviceAttribute does not exist.
+> In loadlibrary at 402 
