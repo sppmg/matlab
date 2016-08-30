@@ -3,12 +3,13 @@ function mapProc(daq)
 	% ui for GUI headle , ana for all analysis variable, .rt_ for real time , .lt_ for long time.
 	if nargin == 0
 	% Section action by direct run this function file. Only define daq object and run it.
-		% delete(timerfind); close all; clear classes;
+		%delete(timerfind); close all; clear classes;
+		delete(timerfind); close all;
 		% batch(@t1t2,1);
 		ui=gui;
-		return;
+		%return;
 		%batch(@heartCtrl_t1t2_gui,1);
-		daq = daqmx_Task('chan','dev4/ai0:1','rate',5000,'callbackfunc','mapProc','ProcPeriod',2);
+		daq = daqmx_Task('chan','dev6/ai0:1','rate',5000,'callbackfunc','mapProc','ProcPeriod',2);
 		daq.DataStorageLen = 30*daq.Rate ;			% store 120 sec. data in object.
 		daq.resetDev;
 		daq.start;
@@ -67,23 +68,25 @@ function mapProc(daq)
 				% daq -> col 1 == LVP , col2 == pace
 				
 				ana.rt_peakMinInterval_lvp = str2double(get(ui.peakMinInterval_lvp,'string')) ;
-				
+				%ana.rt_peakMinInterval_pace = str2double(get(ui.peakMinInterval_pace,'string')) ;
+				ana.rt_peakMinHeight_pace = str2double(get(ui.peakMinHeight_pace,'string')) ;
 				%[pks,locs] = findpeaks( sign(ana.rt_peakHigh)*daq.data, 'MINPEAKHEIGHT', abs(ana.rt_peakHigh), 'MINPEAKDISTANCE', ana.peakMinInterval_lvp * daq.Rate);
 				% pacing interval
 				[~,locsp] = findpeaks(daq.DataStorage(:,2), 'MINPEAKDISTANCE', round( ana.rt_peakMinInterval_lvp * daq.Rate), 'MINPEAKHEIGHT' ,ana.rt_peakMinHeight_pace );
+				
 				if ~isempty(locsp)
 					tmp = [ana.histPace; [daq.DataTime(locsp(2:end)),diff(daq.DataTime(locsp))] ];
 					%[~,ic,~] = unique(tmp, stable');
 					[~,ic,~] = unique(tmp(:,1),'first');
-					ana.histLVP = tmp(ic,:) ;
+					ana.histPace = tmp(ic,:) ;
 					%ana.histPace = [ana.histPace; [daq.DataTime(locs(2:end)),diff(daq.DataTime(locs))] ];
 				end
 				
 				
 				sp=smooth(daq.DataStorage(:,1),round(daq.Rate/1e2) ); % 10ms
-				[pks,locs] = findpeaks( sp,'MINPEAKDISTANCE',ana.rt_peakMinInterval_lvp * daq.Rate,'MINPEAKHEIGHT',mean(sp));
+				[pks,locs] = findpeaks( sp,'MINPEAKDISTANCE',round(ana.rt_peakMinInterval_lvp * daq.Rate),'MINPEAKHEIGHT',mean(sp));
 				if ~isempty(locs)
-					tmp = [ana.histLVP;[daq.DataTime(locs),sp(locs)] ];
+					tmp = [ana.histLVP;[daq.DataTime(locs(2:end-1)),sp(locs(2:end-1))] ];
 					%[~,ic,~] = unique(tmp, stable');
 					[~,ic,~] = unique(tmp(:,1),'first');
 					ana.histLVP = tmp(ic,:) ;
@@ -104,6 +107,7 @@ function mapProc(daq)
 				else
 					switch numel(str2num(tmp))
 						case 1
+							%if tmp > 0 && 
 							set(ui.plotAxes_hist,'XLim',[str2num(tmp) , ana.histLVP(end-1,1)]);
 							%xlim(pl.histLVP,[str2num(tmp) , ana.histPace(end,1)] );
 						case 2
@@ -168,11 +172,10 @@ end
 function ui=gui()
 %global ui;
 defFontSize=18 ;
-ui.fig = figure('MenuBar', 'none','ToolBar', 'none','Units','normalized','Position',[0.6,0.035,0.4,0.91]) ; % 'Renderer','OpenGL',
-
+ui.fig = figure('MenuBar', 'none','ToolBar', 'none','Units','normalized','Position',[0.2,0.035,0.79,0.95]) ; % 'Renderer','OpenGL',
 
 ui.layBase = uiextras.VBox('Parent',ui.fig,'Spacing', 3);
-	ui.layHist = uiextras.HBox('Parent',ui.layBase,'Spacing', 0);
+	ui.layHist = uiextras.HBox('Parent',ui.layBase,'Spacing', 10);
 		ui.plotPlace_hist = uipanel('Parent', ui.layHist, 'BorderType','none','BorderWidth',0);
 		ui.plotAxes_hist(1) = axes( 'Parent', ui.plotPlace_hist, ...
 					'DrawMode', 'fast', ...
